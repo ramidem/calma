@@ -16,7 +16,7 @@
    node calma.mjs auth
    ```
 
-   Open the printed URL, pick the Google account, approve. The token is saved to `~/.config/calma/<address>.json` (mode 600).
+   Your browser opens on Google's account chooser: pick the account and approve. (If it cannot open, or you pass `--no-open`, open the printed `url` yourself.) The token is saved to `~/.config/calma/<address>.json` (mode 600).
 
 Test-mode tokens expire after 7 days; when a command answers `reauth_needed`, run `auth` again.
 
@@ -27,7 +27,7 @@ Upgrading from a version that used `MAIL_ACCOUNT_*` and `accounts.env`: run `aut
 Output is JSON on stdout. Errors are JSON too, with exit code 1. With one account signed in, commands need nothing extra; with several, add `--account <email>` (or `-a`).
 
 ```sh
-node calma.mjs auth                               # sign in; opens Google's account chooser
+node calma.mjs auth [--no-open]                   # sign in; opens Google's account chooser in your browser
 node calma.mjs accounts                           # list signed-in addresses
 node calma.mjs mail-recent [gmail query]          # default: last 7 days, up to 20
 node calma.mjs mail-thread <threadId>             # hex id from mail-recent
