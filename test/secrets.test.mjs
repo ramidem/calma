@@ -2,10 +2,11 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { readFileSync, statSync } from "node:fs";
 import { test } from "node:test";
+import { listAccounts } from "../lib/accounts.mjs";
 import * as config from "../lib/config.mjs";
 import * as google from "../lib/google.mjs";
 import * as oauth from "../lib/oauth.mjs";
-import { SCOPE, jsonResponse, sandbox } from "./helpers.mjs";
+import { SCOPE, jsonResponse, sandbox, visit } from "./helpers.mjs";
 
 const mode = (p) => statSync(p).mode & 0o777;
 
@@ -62,12 +63,13 @@ test("error messages from Google never echo a token", async () => {
 });
 
 test("auth: end to end with a mocked Google, and refuses a wrong account or extra scope", async () => {
-  async function runAuth({ scope = SCOPE, email = "personal@example.com" } = {}) {
+  async function runAuth({ scope = SCOPE, email = "me@example.com" } = {}) {
     const { env } = sandbox({ token: false });
     // sandbox wrote a placeholder token; remove it so we see what auth saves.
     const { rmSync } = await import("node:fs");
     rmSync(config.tokenPath("personal", env));
     const events = [];
+    const pending = [];
     const revoked = [];
     const fetchFn = async (url, init) => {
       if (String(url).startsWith("https://oauth2.googleapis.com/revoke")) {
@@ -84,10 +86,11 @@ test("auth: end to end with a mocked Google, and refuses a wrong account or extr
         const cb = new URL(u.searchParams.get("redirect_uri"));
         cb.searchParams.set("code", "CODE");
         cb.searchParams.set("state", u.searchParams.get("state"));
-        setTimeout(() => fetch(cb), 20);
+        pending.push(visit(cb, 20));
       }
     };
-    const result = await oauth.authorize("personal", { fetchFn, env, emit, timeoutMs: 5000 }).then((r) => ({ r }), (e) => ({ e }));
+    const result = await oauth.authorize({ fetchFn, env, emit, timeoutMs: 5000 }).then((r) => ({ r }), (e) => ({ e }));
+    await Promise.all(pending);
     return { env, events, revoked, ...result };
   }
   const ok = await runAuth();
@@ -95,19 +98,29 @@ test("auth: end to end with a mocked Google, and refuses a wrong account or extr
   assert.deepEqual(ok.revoked, [], "a good sign-in revokes nothing");
   assert.equal(new URL(ok.events[0].url).host, "accounts.google.com");
   assert.ok(!JSON.stringify([ok.r, ...ok.events]).includes("R1"));
-  // Nothing printed echoes the configured address either.
-  assert.ok(!JSON.stringify([ok.r, ...ok.events]).includes("personal@example.com"));
-  assert.equal(mode(config.tokenPath("personal", ok.env)), 0o600);
+  // The address Google reports names the account and the token file; the sign-in URL carries no address.
+  assert.equal(ok.r.account, "me@example.com");
+  assert.ok(!ok.events[0].url.includes("example.com"));
+  assert.equal(new URL(ok.events[0].url).searchParams.get("prompt"), "consent select_account");
+  assert.equal(mode(config.tokenPath("me@example.com", ok.env)), 0o600);
+  assert.deepEqual(listAccounts(ok.env), ["me@example.com"]);
 
   const extra = await runAuth({ scope: `${SCOPE} https://www.googleapis.com/auth/gmail.send` });
   assert.equal(extra.e.code, "scope_refused");
   assert.deepEqual(extra.revoked, ["R1"], "the refused grant is revoked at Google");
   assert.match(extra.e.message, /revoked at Google/);
-  assert.throws(() => config.loadToken("personal", extra.env), { code: "reauth_needed" });
+  assert.deepEqual(listAccounts(extra.env), [], "nothing saved");
 
-  const wrong = await runAuth({ email: "someone.else@example.com" });
-  assert.equal(wrong.e.code, "wrong_account");
-  assert.deepEqual(wrong.revoked, ["R1"], "the wrong account's grant is revoked at Google");
-  assert.ok(!JSON.stringify(wrong.e.message).includes("R1"));
-  assert.throws(() => config.loadToken("personal", wrong.env), { code: "reauth_needed" });
+  // A profile without a usable address is refused, revoked and not saved; so is a failed profile call.
+  for (const email of [null, "", "../x@example.com", "not an address"]) {
+    const bad = await runAuth({ email });
+    assert.equal(bad.e.code, "auth_failed", String(email));
+    assert.deepEqual(bad.revoked, ["R1"], "the grant is revoked at Google");
+    assert.ok(!bad.e.message.includes("R1"));
+    assert.deepEqual(listAccounts(bad.env), []);
+  }
+
+  // Signing in again as the same account replaces its token; a second account adds one.
+  const again = await runAuth({ email: " Me@Example.com " });
+  assert.equal(again.r.account, "me@example.com");
 });
