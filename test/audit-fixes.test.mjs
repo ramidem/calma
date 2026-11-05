@@ -26,7 +26,7 @@ test("a callback with the wrong state is ignored and sign-in keeps waiting", asy
     cb.searchParams.set("state", u.searchParams.get("state"));
     setTimeout(() => fetch(cb), 60);
   };
-  const result = await oauth.authorize("personal", { fetchFn, env, emit, timeoutMs: 5000 });
+  const result = await oauth.authorize({ fetchFn, env, emit, timeoutMs: 5000 });
   assert.equal(result.event, "authorized");
   assert.equal(await stray, 400);
 });
@@ -123,7 +123,7 @@ test("a stalled body during sign-in (token exchange and profile) is a timeout, a
     cb.searchParams.set("state", u.searchParams.get("state"));
     setTimeout(() => fetch(cb), 20);
   };
-  await assert.rejects(oauth.authorize("personal", { fetchFn, env, emit, timeoutMs: 5000 }), { code: "timeout" });
+  await assert.rejects(oauth.authorize({ fetchFn, env, emit, timeoutMs: 5000 }), { code: "timeout" });
   assert.deepEqual(revoked, ["R1"]);
 });
 
