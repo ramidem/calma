@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 /** The write side, listed on purpose: a new file there must be added here, in a PR a reviewer reads. */
-const WRITE_FILES = ["calma-write.mjs", "lib/write/oauth.mjs", "lib/write/policy.mjs", "lib/write/scopes.mjs", "lib/write/tokens.mjs"];
+const WRITE_FILES = ["calma-write.mjs", "lib/write/events.mjs", "lib/write/log.mjs", "lib/write/oauth.mjs", "lib/write/policy.mjs", "lib/write/scopes.mjs", "lib/write/tokens.mjs"];
 
 const read = (rel) => readFileSync(join(root, rel), "utf8");
 
@@ -57,4 +57,11 @@ test("calma-write.mjs does reach the write modules (so the boundary test is not 
 test("the write scope is defined in one file only", () => {
   const holders = [...WRITE_FILES, ...readdirSync(join(root, "lib")).filter((f) => f.endsWith(".mjs")).map((f) => `lib/${f}`), "calma.mjs"].filter((f) => /auth\/calendar\.events/.test(read(f)));
   assert.deepEqual(holders, ["lib/write/scopes.mjs"]);
+});
+
+test("the write side makes only the requests this PR allows: POST (create), plus Google's token, revoke and userinfo calls", () => {
+  for (const f of WRITE_FILES) {
+    const methods = [...read(f).matchAll(/(?<![\w])method:\s*["'](\w+)["']/g)].map((m) => m[1]);
+    for (const m of methods) assert.ok(m === "POST", `${f} uses method ${m}`);
+  }
 });

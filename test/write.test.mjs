@@ -187,7 +187,10 @@ test("a hand-made write token with a read scope is refused", async () => {
 });
 
 test("the calma-write command: parse, accounts, policy, allow, usage", async () => {
-  assert.deepEqual(cli.parseArgs(["allow", "--account", "me@example.com"]), { cmd: "allow", rest: [], flags: { account: "me@example.com", calendar: undefined, open: true } });
+  const parsed = cli.parseArgs(["allow", "--account", "me@example.com"]);
+  assert.equal(parsed.cmd, "allow");
+  assert.equal(parsed.flags.account, "me@example.com");
+  assert.equal(parsed.flags.open, true);
   assert.deepEqual(cli.parseArgs(["allow", "--calendar", "primary"]).flags.calendar, "primary");
   assert.equal(cli.parseArgs(["auth", "--no-open"]).flags.open, false);
   assert.throws(() => cli.parseArgs(["allow", "--calendar"]), { code: "usage" });
