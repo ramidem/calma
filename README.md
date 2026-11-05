@@ -46,7 +46,8 @@ Report vulnerabilities as in [SECURITY.md](SECURITY.md).
 ## Development
 
 ```sh
-npm test    # Node 22+, no network, no secrets
+nvm use     # Node 22, from .nvmrc
+npm test    # no network, no secrets
 ```
 
 One test fails on any email address other than `@example.com` or any hardcoded personal name. See [CONTRIBUTING.md](CONTRIBUTING.md).
