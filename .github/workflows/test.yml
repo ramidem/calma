@@ -14,8 +14,9 @@ jobs:
         with:
           node-version: 22
       - run: |
-          node --test --test-reporter=tap "test/*.test.mjs" > /tmp/out.txt 2>&1 || true
-          echo "::error::lines $(wc -l < /tmp/out.txt) fail $(grep -c '^not ok' /tmp/out.txt) nested $(grep -c 'not ok' /tmp/out.txt)"
-          grep -n "not ok" /tmp/out.txt | head -10 | while IFS= read -r l; do echo "::error::$l"; done
-          tail -40 /tmp/out.txt | while IFS= read -r l; do echo "::error::$l"; done
+          for i in 1 2 3; do
+            node --test --test-reporter=tap "test/*.test.mjs" > /tmp/out$i.txt 2>&1; code=$?
+            echo "::error::run $i exit $code fail $(grep -c '^not ok' /tmp/out$i.txt) cancelled $(grep -c 'cancelledByParent' /tmp/out$i.txt) unhandled $(grep -ci 'unhandled\|ECONNREFUSED\|ERR_UNHANDLED' /tmp/out$i.txt)"
+            if [ $code != 0 ]; then grep -n -i "unhandled\|ECONNREFUSED\|Error\|not ok" /tmp/out$i.txt | head -15 | while IFS= read -r l; do echo "::error::$l"; done; fi
+          done
           exit 1
