@@ -15,5 +15,7 @@ jobs:
           node-version: 22
       - run: |
           node --test --test-reporter=tap "test/*.test.mjs" > /tmp/out.txt 2>&1 || true
-          grep -n -B2 -A25 "^not ok\|^    not ok" /tmp/out.txt | head -80 | while IFS= read -r l; do echo "::error::$l"; done
+          echo "::error::lines $(wc -l < /tmp/out.txt) fail $(grep -c '^not ok' /tmp/out.txt) nested $(grep -c 'not ok' /tmp/out.txt)"
+          grep -n "not ok" /tmp/out.txt | head -10 | while IFS= read -r l; do echo "::error::$l"; done
+          tail -40 /tmp/out.txt | while IFS= read -r l; do echo "::error::$l"; done
           exit 1
