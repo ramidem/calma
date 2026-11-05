@@ -1,10 +1,23 @@
 {
   "name": "calma",
+  "version": "0.1.0",
+  "description": "Read-only Gmail and Google Calendar as JSON. No dependencies.",
+  "license": "MIT",
+  "keywords": [
+    "gmail",
+    "google-calendar",
+    "cli",
+    "read-only",
+    "oauth"
+  ],
   "private": true,
   "type": "module",
-  "description": "Read-only Gmail and Calendar JSON for the owner's accounts. No dependencies; not part of the app.",
-  "engines": { "node": ">=22" },
-  "bin": { "calma": "./calma.mjs" },
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "calma": "./calma.mjs"
+  },
   "scripts": {
     "test": "node --test \"test/*.test.mjs\""
   }

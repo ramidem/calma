@@ -1,74 +1,50 @@
 # calma
 
-**cal**endar and **ma**il, read-only. Gmail and Calendar JSON for up to a few accounts you name in environment variables. One small Node script, JSON on stdout, its own repo, no dependencies.
+**Cal**endar and **ma**il, read-only. A small Node CLI that prints your Gmail and Google Calendar as JSON. No dependencies.
 
-## What it can and can't do
+- Requests only `gmail.readonly` and `calendar.readonly`, and refuses any other scope.
+- No send, draft, modify, label, delete or RSVP code. Every request is a GET to an allow-listed read endpoint, and a test enforces it.
+- Accounts, addresses and the OAuth client come from your environment, never from the repo.
 
-Can:
+## Setup
 
-- Read recent mail (sender, recipients, subject, date, snippet) and one whole thread (plain-text body, attachment names only).
-- Read this week's events from the account's primary calendar (title, time, location, attendee count).
-
-Can't, by design:
-
-- Send, draft, modify, label, archive, delete or RSVP. There is no such function in the code, no such endpoint on the allow-list, and a test fails if one appears.
-- Request any scope other than `https://www.googleapis.com/auth/gmail.readonly` and `https://www.googleapis.com/auth/calendar.readonly`. It refuses to build an auth URL with another scope, and refuses (and saves nothing) if Google grants one.
-- Read an account you have not configured. Each account is an environment variable (`MAIL_ACCOUNT_<NAME>=<address>`, see below); no address or name is written in the code, the tests or these docs. During `auth` it checks that the signed-in Google address is the configured one.
-
-Because the limit is the scope Google grants, a bug in this script still could not send or change anything.
-
-## Setup (the owner does the Google Cloud steps)
-
-1. In Google Cloud Console, create or pick a project. Enable the **Gmail API** and the **Google Calendar API**.
-2. OAuth consent screen (Google Auth Platform): app type External, publishing status **Testing**. Under **Data Access** add only `.../auth/gmail.readonly` and `.../auth/calendar.readonly`. Under **Audience** add each account's address as a **test user**.
-3. Credentials: create an **OAuth client ID** of type **Desktop app**. Download the JSON.
-4. Save it as `~/.config/calma/client.json` (or anywhere, and point `MAIL_CLIENT_FILE` at it) and run `chmod 600` on it (create the folder with `mkdir -m 700 ~/.config/calma` if it is not there; the script creates it with mode 700 when it first saves a token). The file can be Google's download as is, or `{"client_id": "...", "client_secret": "..."}`.
-
-5. Name your accounts. Copy [`.env.example`](.env.example) to `~/.config/calma/accounts.env`, `chmod 600` it, and put your real addresses in it:
+1. In Google Cloud, enable the **Gmail API** and **Google Calendar API**. On the OAuth consent screen (type External, status Testing) add the two read-only scopes and your addresses as test users.
+2. Create an **OAuth client ID** (Desktop app) and save the JSON as `~/.config/calma/client.json` (`chmod 600`), or set `MAIL_CLIENT_FILE`.
+3. Name your accounts: copy [`.env.example`](.env.example) to `~/.config/calma/accounts.env`, `chmod 600`, fill in `MAIL_ACCOUNT_<NAME>=<address>`. `<NAME>` in lower case is the label you use below. Exported variables win over the file (`MAIL_ENV_FILE` points elsewhere).
+4. Sign in once per account:
 
    ```sh
-   cp .env.example ~/.config/calma/accounts.env
-   chmod 600 ~/.config/calma/accounts.env
-   # then edit it: MAIL_ACCOUNT_PERSONAL=<personal-address>, MAIL_ACCOUNT_WORK=<work-address>, ...
+   node calma.mjs auth <name>
    ```
 
-   The script reads that file by itself (`MAIL_ENV_FILE` points it somewhere else). Variables you already exported win over the file, so this works too:
+   Open the printed URL, approve, done. The token is saved to `~/.config/calma/<name>.json` (mode 600).
 
-   ```sh
-   export MAIL_ACCOUNT_PERSONAL='<personal-address>'
-   export MAIL_ACCOUNT_WORK='<work-address>'
-   export MAIL_CLIENT_FILE="$HOME/.config/calma/client.json"   # optional, this is the default
-   ```
+Test-mode tokens expire after 7 days; when a command answers `reauth_needed`, run `auth` again.
 
-   `<NAME>` in lower case is the label you type: `MAIL_ACCOUNT_PERSONAL` becomes `personal`. If a label's variable is missing the script stops and says which variable to set; it never prints an address. The real env file is gitignored (`.env`, `*.env`, `accounts.env`); only `.env.example`, with placeholders, is committed.
+## Usage
 
-The client file, the accounts file and the tokens live outside the repo. `.gitignore` also blocks `client_secret*.json`, `credentials*.json` and `tokens/` in case one is copied in by mistake.
-
-## One-time sign-in per account
+Output is JSON on stdout. Errors are JSON too, with exit code 1.
 
 ```sh
-node calma.mjs auth <name>      # for example: auth personal
+node calma.mjs mail-recent <name> [gmail query]   # default: last 7 days, up to 20
+node calma.mjs mail-thread <name> <threadId>      # hex id from mail-recent
+node calma.mjs calendar-week <name>               # Monday to next Monday
 ```
 
-It prints one JSON line with an `auth_url`. Open that URL in a browser and pick the matching Google account, approve the two read-only permissions, and the script receives Google's answer on `127.0.0.1` (a random local port), saves the token to `~/.config/calma/<name>.json` (mode 600) and prints `{"event":"authorized",...}`. Repeat for each label. Google may warn that the app is unverified; that is expected for a test-mode app that only you use.
+## Security
 
-**Test mode expires tokens after 7 days.** When a command answers `{"error":"reauth_needed",...}`, run `auth <name>` again. Moving the consent screen to "In production" removes the 7-day limit but changes how Google treats the app (it may ask for verification for sensitive scopes); keep it in Testing unless that becomes a real nuisance.
+Token files are plain files: any process running as you can read them. Delete `~/.config/calma/<name>.json` and revoke the app in your Google account to cut access. Nothing secret is ever printed or logged.
 
-## Commands
+Report vulnerabilities as in [SECURITY.md](SECURITY.md).
 
-All output is JSON on stdout. Errors are JSON too, with exit code 1: `{"error":"<code>","message":"..."}`.
+## Development
 
 ```sh
-node calma.mjs mail-recent <name>                        # last 7 days, up to 20 messages
-node calma.mjs mail-recent <name> from:<sender-address> newer_than:14d   # any Gmail search query
-node calma.mjs mail-thread <name> <threadId>              # a hex threadId from mail-recent
-node calma.mjs calendar-week <name>                      # Monday to next Monday, local time
+npm test    # Node 22+, no network, no secrets
 ```
 
-Run the tests (no network, no secrets, placeholder addresses only, a temporary folder): `npm test`. One test scans this folder and fails on any email address other than `@example.com` or any hardcoded name; keep it that way.
+One test fails on any email address other than `@example.com` or any hardcoded personal name. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
-## Security note
+## License
 
-The token files are plain files. **Any agent or program with full access to this Mac can read them**, including the OpenBot agents that run here with full local access. So this is not private from the bots; it only keeps mail and calendar access out of their tool lists, and what a stolen token could do is limited to reading the configured accounts. To cut access completely: delete `~/.config/calma/<name>.json` and revoke the app under the Google account's Security, Third-party access page.
-
-The script never prints or logs a token, client secret, authorization code or configured address, and error messages carry only Google's error code or the name of the variable that is missing.
+[MIT](LICENSE)
