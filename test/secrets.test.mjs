@@ -68,7 +68,12 @@ test("auth: end to end with a mocked Google, and refuses a wrong account or extr
     const { rmSync } = await import("node:fs");
     rmSync(config.tokenPath("personal", env));
     const events = [];
-    const fetchFn = async (url) => {
+    const revoked = [];
+    const fetchFn = async (url, init) => {
+      if (String(url).startsWith("https://oauth2.googleapis.com/revoke")) {
+        revoked.push(new URLSearchParams(init.body).get("token"));
+        return jsonResponse({});
+      }
       if (String(url).startsWith("https://oauth2.googleapis.com/token")) return jsonResponse({ access_token: "A1", refresh_token: "R1", expires_in: 3600, scope });
       return jsonResponse({ emailAddress: email });
     };
@@ -83,10 +88,11 @@ test("auth: end to end with a mocked Google, and refuses a wrong account or extr
       }
     };
     const result = await oauth.authorize("personal", { fetchFn, env, emit, timeoutMs: 5000 }).then((r) => ({ r }), (e) => ({ e }));
-    return { env, events, ...result };
+    return { env, events, revoked, ...result };
   }
   const ok = await runAuth();
   assert.equal(ok.r.event, "authorized");
+  assert.deepEqual(ok.revoked, [], "a good sign-in revokes nothing");
   assert.equal(new URL(ok.events[0].url).host, "accounts.google.com");
   assert.ok(!JSON.stringify([ok.r, ...ok.events]).includes("R1"));
   // Nothing printed echoes the configured address either.
@@ -95,9 +101,13 @@ test("auth: end to end with a mocked Google, and refuses a wrong account or extr
 
   const extra = await runAuth({ scope: `${SCOPE} https://www.googleapis.com/auth/gmail.send` });
   assert.equal(extra.e.code, "scope_refused");
+  assert.deepEqual(extra.revoked, ["R1"], "the refused grant is revoked at Google");
+  assert.match(extra.e.message, /revoked at Google/);
   assert.throws(() => config.loadToken("personal", extra.env), { code: "reauth_needed" });
 
   const wrong = await runAuth({ email: "someone.else@example.com" });
   assert.equal(wrong.e.code, "wrong_account");
+  assert.deepEqual(wrong.revoked, ["R1"], "the wrong account's grant is revoked at Google");
+  assert.ok(!JSON.stringify(wrong.e.message).includes("R1"));
   assert.throws(() => config.loadToken("personal", wrong.env), { code: "reauth_needed" });
 });
