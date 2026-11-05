@@ -390,3 +390,71 @@ test("--any-event on the command line lets an unmarked event through, and only t
   assert.deepEqual(calls.map((c) => c.method), ["GET", "GET", "PATCH"]);
   assert.equal(logLines(env).length, 1);
 });
+
+// ---- times are normalised to full seconds ----------------------------------------------------------------------
+
+test("--start and --end without seconds are shown and sent with :00 (offset and Z forms)", async () => {
+  const env = ready();
+  const dry = await updateEvent(update({ start: "2026-12-09T13:00+08:00", end: "2026-12-09T14:15Z" }), { env, fetchFn: google().fetchFn, now: () => NOW });
+  assert.deepEqual(dry.changes.start.after, { dateTime: "2026-12-09T13:00:00+08:00" });
+  assert.deepEqual(dry.changes.end.after, { dateTime: "2026-12-09T14:15:00Z" });
+  const { calls, fetchFn } = google();
+  const out = await updateEvent(update({ start: "2026-12-09T13:00+08:00", end: "2026-12-09T14:15Z" }), { yes: true, env, fetchFn, now: () => NOW });
+  assert.deepEqual(calls[1].body.start, { dateTime: "2026-12-09T13:00:00+08:00" });
+  assert.deepEqual(calls[1].body.end, { dateTime: "2026-12-09T14:15:00Z" });
+  assert.equal(out.event, "updated");
+  // fractional seconds are left as given
+  const frac = await updateEvent(update({ start: "2026-12-09T13:00:00.500+08:00" }), { env, fetchFn: google().fetchFn, now: () => NOW });
+  assert.deepEqual(frac.changes.start.after, { dateTime: "2026-12-09T13:00:00.500+08:00" });
+});
+
+test("a new --start without seconds keeps the event's length, and the computed end has seconds", async () => {
+  const env = ready();
+  const { calls, fetchFn } = google();
+  await updateEvent(update({ start: "2026-12-09T13:00-05:30" }), { yes: true, env, fetchFn, now: () => NOW });
+  assert.deepEqual(calls[1].body.start, { dateTime: "2026-12-09T13:00:00-05:30" });
+  assert.deepEqual(calls[1].body.end, { dateTime: "2026-12-09T14:30:00-05:30" });
+  const dry = await updateEvent(update({ start: "2026-12-09T13:00Z" }), { env, fetchFn: google().fetchFn, now: () => NOW });
+  assert.deepEqual(dry.changes.end.after, { dateTime: "2026-12-09T14:30:00Z" });
+});
+
+test("the same instant given without seconds, in another offset or with seconds is nothing_to_change", async () => {
+  const env = ready();
+  for (const over of [{ start: "2026-12-08T09:00+08:00" }, { start: "2026-12-08T01:00Z" }, { end: "2026-12-08T10:30+08:00" }, { start: "2026-12-08T01:00Z", end: "2026-12-08T02:30Z" }, { start: "2026-12-08T09:00:00+08:00" }]) {
+    const { calls, fetchFn } = google();
+    await assert.rejects(updateEvent(update(over), { yes: true, env, fetchFn, now: () => NOW }), { code: "nothing_to_change" }, JSON.stringify(over));
+    assert.deepEqual(calls.map((c) => c.method), ["GET"], "no PATCH for an unchanged time");
+  }
+});
+
+test("a stored time Google gave without seconds still produces full seconds for a kept-length start", async () => {
+  const env = ready();
+  const event = stored({ start: { dateTime: "2026-12-08T09:00+08:00" }, end: { dateTime: "2026-12-08T10:30+08:00" } });
+  const { calls, fetchFn } = google(event);
+  await updateEvent(update({ start: "2026-12-09T09:00+08:00" }), { yes: true, env, fetchFn, now: () => NOW });
+  assert.deepEqual(calls[1].body.start, { dateTime: "2026-12-09T09:00:00+08:00" });
+  assert.deepEqual(calls[1].body.end, { dateTime: "2026-12-09T10:30:00+08:00" });
+});
+
+test("switching an all-day event to timed with times without seconds sends full seconds", async () => {
+  const env = ready();
+  const { calls, fetchFn } = google(allDayStored());
+  await updateEvent(update({ start: "2026-12-08T09:00+08:00", end: "2026-12-08T10:00+08:00" }), { yes: true, env, fetchFn, now: () => NOW });
+  assert.deepEqual(calls[1].body.start, { dateTime: "2026-12-08T09:00:00+08:00", date: null });
+  assert.deepEqual(calls[1].body.end, { dateTime: "2026-12-08T10:00:00+08:00", date: null });
+});
+
+test("invalid times without seconds are still refused on update, before any request", async () => {
+  const env = ready();
+  for (const over of [{ start: "2026-12-09T13:00" }, { end: "2026-12-09T24:00Z" }, { start: "2026-02-30T13:00Z" }]) {
+    await assert.rejects(updateEvent(update(over), { yes: true, env, fetchFn: never, now: () => NOW }), { code: "bad_event" }, JSON.stringify(over));
+  }
+});
+
+test("a 400 on the update names the rejected field and never Google's message", async () => {
+  const env = ready();
+  const body = { error: { status: "INVALID_ARGUMENT", message: "Bearer WRITE-ACCESS-LEAK", errors: [{ reason: "invalid", location: "start.dateTime", message: "WRITE-ACCESS-LEAK" }] } };
+  const fetchFn = async (url, init) => (init.method === "PATCH" ? jsonResponse(body, 400) : jsonResponse(stored()));
+  await assert.rejects(updateEvent(update({ title: "New" }), { yes: true, env, fetchFn, now: () => NOW }), { code: "google_error", message: "Google answered 400 (invalid) for field start.dateTime." });
+  assert.equal(existsSync(logPath(env)), false, "nothing logged for the failure");
+});
