@@ -50,9 +50,14 @@ node calma-write.mjs allow --calendar primary     # which calendars (once; add m
 node calma-write.mjs policy                       # show the allow-lists
 node calma-write.mjs auth [--no-open]             # write sign-in; refused (and revoked) for an address not allowed
 node calma-write.mjs accounts                     # addresses with a write token
+
+node calma-write.mjs calendar-create --title <text> --start <time> --end <time> --actor <label>          # dry run: shows what it would create
+node calma-write.mjs calendar-create ... --yes                                                          # creates it
 ```
 
-Add `calendar.events` under Data Access on the Google consent screen first. `node calma.mjs uninstall` removes and revokes write tokens too. The create, update and delete commands come next.
+`calendar-create` options: `--all-day` (dates, end optional and exclusive), `--description`, `--location`, `--free` (does not block time), `--private`, `--prop name=value` (private properties, repeatable), `--calendar <id>` (default `primary`, must be on the allow-list), `--account <email>`, and `--key <text>` (a retry with the same key cannot create a duplicate: Google answers 409, reported as `already_exists`). Times need an offset, like `2026-11-06T09:00:00+08:00`. `--actor` is required: a short label for who is asking, recorded in `write.log` with the event id (never the title). Every created event is marked (`calma=1`, `calma_actor`, `calma_created`), has no guests and no recurrence, and never emails anyone (`sendUpdates=none`). Options it does not know, such as `--attendee`, are refused.
+
+Add `calendar.events` under Data Access on the Google consent screen first. `node calma.mjs uninstall` removes and revokes write tokens too. Update and delete come next.
 
 ## Security
 

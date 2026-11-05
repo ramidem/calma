@@ -6,21 +6,34 @@ import { fileURLToPath } from "node:url";
 import { ToolError } from "./lib/config.mjs";
 import { allowAccount, allowCalendar, loadPolicy } from "./lib/write/policy.mjs";
 import { authorizeWrite } from "./lib/write/oauth.mjs";
+import { createEvent } from "./lib/write/events.mjs";
 import { listWriteAccounts } from "./lib/write/tokens.mjs";
 
 const emit = (obj) => process.stdout.write(`${JSON.stringify(obj)}\n`);
-const USAGE = "Usage: calma-write auth [--no-open] | accounts | policy | allow --account <email> | allow --calendar <id>";
+const USAGE = "Usage: calma-write auth [--no-open] | accounts | policy | allow --account <email> | allow --calendar <id> | calendar-create --title <text> --start <time> [--end <time>] [--all-day] --actor <label> [--yes] [options]";
 
-/** Splits `--account <email>`, `--calendar <id>` and `--no-open` from the positional words. */
+// Options that take a value, and plain switches. Anything else starting with "-" is refused, so a typo like --attendee
+// fails loudly instead of being ignored.
+const VALUE_OPTIONS = { "--account": "account", "-a": "account", "--calendar": "calendar", "--title": "title", "--start": "start", "--end": "end", "--description": "description", "--location": "location", "--actor": "actor", "--key": "key" };
+const SWITCHES = { "--no-open": "noOpen", "--yes": "yes", "--all-day": "allDay", "--free": "free", "--private": "private" };
+
+/** Splits the options from the positional words; `--prop name=value` can repeat. */
 export function parseArgs(argv) {
-  const flags = { account: undefined, calendar: undefined, open: true };
+  const flags = { open: true, yes: false, allDay: false, free: false, private: false, props: {} };
   const words = [];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    if (a === "--account" || a === "-a" || a === "--calendar") {
+    if (a in VALUE_OPTIONS) {
       if (i + 1 >= argv.length) throw new ToolError("usage", `${a} needs a value. ${USAGE}`);
-      flags[a === "--calendar" ? "calendar" : "account"] = argv[++i];
-    } else if (a === "--no-open") flags.open = false;
+      flags[VALUE_OPTIONS[a]] = argv[++i];
+    } else if (a === "--prop") {
+      const [k, ...v] = String(argv[++i] ?? "").split("=");
+      if (!k || v.length === 0) throw new ToolError("usage", "--prop needs name=value.");
+      flags.props[k] = v.join("=");
+    } else if (a in SWITCHES) {
+      if (a === "--no-open") flags.open = false;
+      else flags[SWITCHES[a]] = true;
+    } else if (a.startsWith("-")) throw new ToolError("usage", `Unknown option ${a}. ${USAGE}`);
     else words.push(a);
   }
   return { cmd: words[0], rest: words.slice(1), flags };
@@ -42,6 +55,8 @@ export async function run(argv, deps = {}) {
       if ((flags.account === undefined) === (flags.calendar === undefined)) throw new ToolError("usage", "allow needs exactly one of --account <email> or --calendar <id>.");
       return out(flags.account !== undefined ? allowAccount(flags.account, env) : allowCalendar(flags.calendar, env));
     }
+    case "calendar-create":
+      return out(await createEvent({ title: flags.title, start: flags.start, end: flags.end, allDay: flags.allDay, description: flags.description, location: flags.location, free: flags.free, private: flags.private, props: flags.props, actor: flags.actor, key: flags.key, account: flags.account, calendar: flags.calendar }, { yes: flags.yes, ...deps }));
     default:
       throw new ToolError("usage", `Unknown command "${cmd}". ${USAGE}`);
   }
