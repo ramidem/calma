@@ -4,35 +4,37 @@
 
 - Requests only `gmail.readonly` and `calendar.readonly`, and refuses any other scope.
 - No send, draft, modify, label, delete or RSVP code. Every request is a GET to an allow-listed read endpoint, and a test enforces it.
-- Accounts, addresses and the OAuth client come from your environment, never from the repo.
+- No account list to maintain: sign in, and calma remembers the address Google reports. Addresses never live in the repo.
 
 ## Setup
 
 1. In Google Cloud, enable the **Gmail API** and **Google Calendar API**. On the OAuth consent screen (type External, status Testing) add the two read-only scopes and your addresses as test users.
-2. Create an **OAuth client ID** (Desktop app) and save the JSON as `~/.config/calma/client.json` (`chmod 600`), or set `MAIL_CLIENT_FILE`.
-3. Name your accounts: copy [`.env.example`](.env.example) to `~/.config/calma/accounts.env`, `chmod 600`, fill in `MAIL_ACCOUNT_<NAME>=<address>`. `<NAME>` in lower case is the label you use below. Exported variables win over the file (`MAIL_ENV_FILE` points elsewhere).
-4. Sign in once per account:
+2. Create an **OAuth client ID** (Desktop app) and save the JSON as `~/.config/calma/client.json` (`chmod 600`), or point `MAIL_CLIENT_FILE` at it.
+3. Sign in, once per account:
 
    ```sh
-   node calma.mjs auth <name>
+   node calma.mjs auth
    ```
 
-   Open the printed URL, approve, done. The token is saved to `~/.config/calma/<name>.json` (mode 600).
+   Open the printed URL, pick the Google account, approve. The token is saved to `~/.config/calma/<address>.json` (mode 600).
 
 Test-mode tokens expire after 7 days; when a command answers `reauth_needed`, run `auth` again.
 
+Upgrading from a version that used `MAIL_ACCOUNT_*` and `accounts.env`: run `auth` again for each account. Old `<label>.json` tokens are ignored; `uninstall --all --yes` removes them.
+
 ## Commands
 
-Output is JSON on stdout. Errors are JSON too, with exit code 1. `<name>` is an account label from setup.
+Output is JSON on stdout. Errors are JSON too, with exit code 1. With one account signed in, commands need nothing extra; with several, add `--account <email>` (or `-a`).
 
 ```sh
-node calma.mjs auth <name>                        # sign in once; saves the token
-node calma.mjs mail-recent <name> [gmail query]   # default: last 7 days, up to 20
-node calma.mjs mail-thread <name> <threadId>      # hex id from mail-recent
-node calma.mjs calendar-week <name>               # Monday to next Monday
-node calma.mjs uninstall <name>                   # dry run: lists what it would remove
-node calma.mjs uninstall <name> --yes             # revoke that account at Google, delete its token
-node calma.mjs uninstall --all --yes              # every token, client.json, accounts.env, then the empty folder
+node calma.mjs auth                               # sign in; opens Google's account chooser
+node calma.mjs accounts                           # list signed-in addresses
+node calma.mjs mail-recent [gmail query]          # default: last 7 days, up to 20
+node calma.mjs mail-thread <threadId>             # hex id from mail-recent
+node calma.mjs calendar-week                      # Monday to next Monday
+node calma.mjs uninstall --account <email>        # dry run: lists what it would remove
+node calma.mjs uninstall --account <email> --yes  # revoke that account at Google, delete its token
+node calma.mjs uninstall --all --yes              # every token, client.json, then the empty folder
 ```
 
 `uninstall` only removes files calma created in `~/.config/calma`, and names anything it kept. Then delete the cloned folder. If a revoke could not reach Google, remove calma under your Google account's Third-party access.
