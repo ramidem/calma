@@ -76,7 +76,7 @@ test("auth: end to end with a mocked Google, and refuses a wrong account or extr
         revoked.push(new URLSearchParams(init.body).get("token"));
         return jsonResponse({});
       }
-      if (String(url).startsWith("https://oauth2.googleapis.com/token")) return jsonResponse({ access_token: "A1", refresh_token: "R1", expires_in: 3600, scope });
+      if (String(url).startsWith("https://oauth2.googleapis.com/token")) return jsonResponse({ access_token: "FAKE-ACCESS-TOKEN-1", refresh_token: "FAKE-REFRESH-TOKEN-1", expires_in: 3600, scope });
       return jsonResponse({ emailAddress: email });
     };
     const emit = (e) => {
@@ -89,7 +89,7 @@ test("auth: end to end with a mocked Google, and refuses a wrong account or extr
         pending.push(visit(cb, 20));
       }
     };
-    const result = await oauth.authorize({ fetchFn, env, emit, timeoutMs: 5000 }).then((r) => ({ r }), (e) => ({ e }));
+    const result = await oauth.authorize({ fetchFn, env, emit, open: null, timeoutMs: 5000 }).then((r) => ({ r }), (e) => ({ e }));
     await Promise.all(pending);
     return { env, events, revoked, ...result };
   }
@@ -97,7 +97,7 @@ test("auth: end to end with a mocked Google, and refuses a wrong account or extr
   assert.equal(ok.r.event, "authorized");
   assert.deepEqual(ok.revoked, [], "a good sign-in revokes nothing");
   assert.equal(new URL(ok.events[0].url).host, "accounts.google.com");
-  assert.ok(!JSON.stringify([ok.r, ...ok.events]).includes("R1"));
+  assert.ok(!JSON.stringify([ok.r, ...ok.events]).includes("FAKE-REFRESH-TOKEN-1"));
   // The address Google reports names the account and the token file; the sign-in URL carries no address.
   assert.equal(ok.r.account, "me@example.com");
   assert.ok(!ok.events[0].url.includes("example.com"));
@@ -107,7 +107,7 @@ test("auth: end to end with a mocked Google, and refuses a wrong account or extr
 
   const extra = await runAuth({ scope: `${SCOPE} https://www.googleapis.com/auth/gmail.send` });
   assert.equal(extra.e.code, "scope_refused");
-  assert.deepEqual(extra.revoked, ["R1"], "the refused grant is revoked at Google");
+  assert.deepEqual(extra.revoked, ["FAKE-REFRESH-TOKEN-1"], "the refused grant is revoked at Google");
   assert.match(extra.e.message, /revoked at Google/);
   assert.deepEqual(listAccounts(extra.env), [], "nothing saved");
 
@@ -115,8 +115,8 @@ test("auth: end to end with a mocked Google, and refuses a wrong account or extr
   for (const email of [null, "", "../x@example.com", "not an address"]) {
     const bad = await runAuth({ email });
     assert.equal(bad.e.code, "auth_failed", String(email));
-    assert.deepEqual(bad.revoked, ["R1"], "the grant is revoked at Google");
-    assert.ok(!bad.e.message.includes("R1"));
+    assert.deepEqual(bad.revoked, ["FAKE-REFRESH-TOKEN-1"], "the grant is revoked at Google");
+    assert.ok(!bad.e.message.includes("FAKE-REFRESH-TOKEN-1"));
     assert.deepEqual(listAccounts(bad.env), []);
   }
 

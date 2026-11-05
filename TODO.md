@@ -9,6 +9,8 @@ Workflow: each item below is its own branch, made in its own git worktree (`git 
 - [ ] Check the CI run on `main` after the next merge (the `test` job was green on PRs #4 and #5; tests also pass locally on Node 22 and 26).
 - [ ] Commit b4209f2 has a personal Gmail as author. Decided: leave the history as it is. Nothing to do unless that changes.
 
+- [x] `auth` opens the browser on the sign-in URL (`--no-open` to skip; the URL is still printed).
+
 ## Sign in without typing an address
 
 `node calma.mjs auth` opens Google's account chooser and saves the token under the address Google reports. No env for accounts, no labels.
