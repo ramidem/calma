@@ -11,6 +11,8 @@ Workflow: each item below is its own branch, made in its own git worktree (`git 
 
 - [x] `auth` opens the browser on the sign-in URL (`--no-open` to skip; the URL is still printed).
 
+- [x] `mail-today`: mail since local midnight, extra Gmail terms allowed; `mail-recent` and `mail-today` report `more` when Gmail has more than the 20 listed.
+
 ## Sign in without typing an address
 
 `node calma.mjs auth` opens Google's account chooser and saves the token under the address Google reports. No env for accounts, no labels.
