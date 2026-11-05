@@ -3,15 +3,15 @@
 //
 // Names are checked two ways without writing a name in plain text here:
 //  1. a baseline of SHA-256 hashes of lower-case words (a hash match means a known personal name is in a file);
-//  2. at run time, the real values from this machine's MAIL_ACCOUNT_* variables (address and local part) and the
-//     optional PII_DENYLIST variable (comma-separated words).
+//  2. at run time, the addresses signed in on this machine (their local parts and pieces) and the optional PII_DENYLIST
+//     variable (comma-separated words).
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { loadEnvFileIfPresent } from "../lib/config.mjs";
+import { listAccounts } from "../lib/accounts.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const sha = (w) => createHash("sha256").update(w).digest("hex");
@@ -34,23 +34,16 @@ export function findPii(text, { hashes = NAME_HASHES, words = [] } = {}) {
   const deny = new Set(words.map((w) => w.toLowerCase()).filter((w) => w.length >= 4));
   for (const word of new Set(text.toLowerCase().match(/[a-z0-9]+/g) ?? [])) {
     if (hashes.has(sha(word))) problems.push("a hardcoded personal name (matches the baseline hashes)");
-    if (deny.has(word)) problems.push("a value from this machine's MAIL_ACCOUNT_* or PII_DENYLIST");
+    if (deny.has(word)) problems.push("a signed-in address of this machine or a PII_DENYLIST word");
   }
   return problems;
 }
 
 function runtimeWords() {
-  try {
-    loadEnvFileIfPresent();
-  } catch {
-    /* no accounts file: the baseline still applies */
-  }
   const words = (process.env.PII_DENYLIST ?? "").split(",").map((w) => w.trim());
-  for (const [k, v] of Object.entries(process.env)) {
-    if (!k.startsWith("MAIL_ACCOUNT_") || !v) continue;
-    const address = v.trim().toLowerCase();
-    if (address.endsWith("@example.com")) continue; // placeholders set by the tests or the sample file
-    words.push(address.split("@")[0], ...address.split(/[^a-z0-9]+/), k.slice("MAIL_ACCOUNT_".length));
+  for (const address of listAccounts(process.env)) {
+    if (address.endsWith("@example.com")) continue; // placeholders used by the tests
+    words.push(address.split("@")[0], ...address.split(/[^a-z0-9]+/));
   }
   return words.filter(Boolean);
 }
@@ -83,12 +76,7 @@ test("this folder holds no email address except example.com and no hardcoded nam
   assert.deepEqual(found, []);
 });
 
-test("the sample env file exists, uses placeholders only, and the real one is ignored by git", () => {
-  const sample = readFileSync(join(root, ".env.example"), "utf8");
-  assert.match(sample, /^MAIL_ACCOUNT_[A-Z0-9_]+=\S+@example\.com$/m);
-  assert.match(sample, /MAIL_CLIENT_FILE/);
+test("real env and credential files are ignored by git", () => {
   const ignore = readFileSync(join(root, ".gitignore"), "utf8").split("\n");
-  assert.ok(ignore.includes(".env"), ".env must be ignored");
-  assert.ok(ignore.includes("*.env"), "*.env must be ignored");
-  assert.ok(ignore.includes("accounts.env"), "accounts.env must be ignored");
+  for (const pattern of [".env", "*.env", "accounts.env", "client.json", "tokens/"]) assert.ok(ignore.includes(pattern), `${pattern} must be ignored`);
 });
