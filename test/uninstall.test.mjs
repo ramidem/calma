@@ -72,6 +72,7 @@ test("it never removes files it doesn't own, and keeps the folder then", async (
   writeFileSync(join(dir, "backup.json"), JSON.stringify({ hello: "world" })); // label-shaped, but not a token
   const out = await uninstall("--all", { yes: true, env, fetchFn: recorder().fetchFn });
   assert.equal(out.folder_removed, false);
+  assert.deepEqual(out.kept_not_a_token, ["backup.json"]);
   assert.ok(existsSync(join(dir, "notes.txt")) && existsSync(join(dir, "backup.json")));
   assert.equal(existsSync(join(dir, "client.json")), false);
 });
