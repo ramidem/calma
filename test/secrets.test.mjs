@@ -6,7 +6,7 @@ import { listAccounts } from "../lib/accounts.mjs";
 import * as config from "../lib/config.mjs";
 import * as google from "../lib/google.mjs";
 import * as oauth from "../lib/oauth.mjs";
-import { SCOPE, jsonResponse, sandbox } from "./helpers.mjs";
+import { SCOPE, jsonResponse, sandbox, visit } from "./helpers.mjs";
 
 const mode = (p) => statSync(p).mode & 0o777;
 
@@ -69,6 +69,7 @@ test("auth: end to end with a mocked Google, and refuses a wrong account or extr
     const { rmSync } = await import("node:fs");
     rmSync(config.tokenPath("personal", env));
     const events = [];
+    const pending = [];
     const revoked = [];
     const fetchFn = async (url, init) => {
       if (String(url).startsWith("https://oauth2.googleapis.com/revoke")) {
@@ -85,10 +86,11 @@ test("auth: end to end with a mocked Google, and refuses a wrong account or extr
         const cb = new URL(u.searchParams.get("redirect_uri"));
         cb.searchParams.set("code", "CODE");
         cb.searchParams.set("state", u.searchParams.get("state"));
-        setTimeout(() => fetch(cb), 20);
+        pending.push(visit(cb, 20));
       }
     };
     const result = await oauth.authorize({ fetchFn, env, emit, timeoutMs: 5000 }).then((r) => ({ r }), (e) => ({ e }));
+    await Promise.all(pending);
     return { env, events, revoked, ...result };
   }
   const ok = await runAuth();

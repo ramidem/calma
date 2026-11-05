@@ -18,3 +18,14 @@ export function sandbox({ token = true, expiresAt = Date.now() + 3_600_000 } = {
 }
 
 export const jsonResponse = (body, status = 200) => ({ ok: status < 400, status, json: async () => body });
+
+/**
+ * Plays the browser's part of a sign-in: calls the loopback callback URL after `delayMs`. The returned promise never
+ * rejects and the body is read, so nothing is left running (or unhandled) when the test ends; await it before finishing.
+ */
+export function visit(url, delayMs = 20) {
+  return new Promise((resolve) => setTimeout(resolve, delayMs))
+    .then(() => fetch(url))
+    .then(async (res) => (await res.text(), res.status))
+    .catch(() => null);
+}
