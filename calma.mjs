@@ -8,7 +8,7 @@ import { calendarWeek, mailRecent, mailThread } from "./lib/google.mjs";
 import { authorize } from "./lib/oauth.mjs";
 
 const emit = (obj) => process.stdout.write(`${JSON.stringify(obj)}\n`);
-const USAGE = "Usage: readonly-mail auth <name> | mail-recent <name> [query] | mail-thread <name> <threadId> | calendar-week <name>   (<name> is the label of a MAIL_ACCOUNT_<NAME> variable)";
+const USAGE = "Usage: calma auth <name> | mail-recent <name> [query] | mail-thread <name> <threadId> | calendar-week <name>   (<name> is the label of a MAIL_ACCOUNT_<NAME> variable)";
 
 export async function run(argv, deps = {}) {
   const [cmd, name, ...rest] = argv;

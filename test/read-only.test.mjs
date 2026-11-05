@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import * as config from "../lib/config.mjs";
 import * as google from "../lib/google.mjs";
 import * as oauth from "../lib/oauth.mjs";
-import * as cli from "../readonly-mail.mjs";
+import * as cli from "../calma.mjs";
 import { ACCOUNT_ENV, jsonResponse, sandbox } from "./helpers.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -34,7 +34,7 @@ test("the code has no send, draft, modify, label, delete or RSVP function", () =
       assert.doesNotMatch(name, forbidden, `exported function ${name}`);
     }
   }
-  const sources = ["readonly-mail.mjs", ...readdirSync(join(root, "lib")).map((f) => `lib/${f}`)].map((f) => [f, readFileSync(join(root, f), "utf8")]);
+  const sources = ["calma.mjs", ...readdirSync(join(root, "lib")).map((f) => `lib/${f}`)].map((f) => [f, readFileSync(join(root, f), "utf8")]);
   for (const [file, src] of sources) {
     // No write endpoints or write-ish Google paths.
     assert.doesNotMatch(src, /messages\/send|\/drafts|batchModify|\/modify|\/trash|\/labels|\/rsvp|events\/[^"'`]*\/(move|import|quickAdd)|users\/me\/settings/i, `${file} mentions a write endpoint`);
@@ -75,8 +75,8 @@ test("accounts come from MAIL_ACCOUNT_<NAME> variables, and a missing or bad one
 });
 
 test("the OAuth client file comes from MAIL_CLIENT_FILE, else the config folder", () => {
-  assert.equal(config.clientPath({ MAIL_CLIENT_FILE: "/somewhere/else.json", READONLY_MAIL_DIR: "/cfg" }), "/somewhere/else.json");
-  assert.equal(config.clientPath({ READONLY_MAIL_DIR: "/cfg" }), join("/cfg", "client.json"));
+  assert.equal(config.clientPath({ MAIL_CLIENT_FILE: "/somewhere/else.json", CALMA_DIR: "/cfg" }), "/somewhere/else.json");
+  assert.equal(config.clientPath({ CALMA_DIR: "/cfg" }), join("/cfg", "client.json"));
 });
 
 test("an accounts env file is loaded without overriding what is already set", () => {
