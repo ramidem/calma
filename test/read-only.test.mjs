@@ -36,7 +36,7 @@ test("the code has no send, draft, modify, label, delete or RSVP function", () =
       assert.doesNotMatch(name, forbidden, `exported function ${name}`);
     }
   }
-  const sources = ["calma.mjs", ...readdirSync(join(root, "lib")).map((f) => `lib/${f}`)].map((f) => [f, readFileSync(join(root, f), "utf8")]);
+  const sources = ["calma.mjs", ...readdirSync(join(root, "lib")).filter((f) => f.endsWith(".mjs")).map((f) => `lib/${f}`)].map((f) => [f, readFileSync(join(root, f), "utf8")]);
   for (const [file, src] of sources) {
     // No write endpoints or write-ish Google paths.
     assert.doesNotMatch(src, /messages\/send|\/drafts|batchModify|\/modify|\/trash|\/labels|\/rsvp|events\/[^"'`]*\/(move|import|quickAdd)|users\/me\/settings/i, `${file} mentions a write endpoint`);

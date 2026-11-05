@@ -1,9 +1,9 @@
 # calma
 
-**Cal**endar and **ma**il, read-only. A small Node CLI that prints your Gmail and Google Calendar as JSON. No dependencies.
+**Cal**endar and **ma**il. A small Node CLI that prints your Gmail and Google Calendar as JSON. No dependencies.
 
-- Requests only `gmail.readonly` and `calendar.readonly`, and refuses any other scope.
-- No send, draft, modify, label, delete or RSVP code. Every request is a GET to an allow-listed read endpoint, and a test enforces it.
+- `calma.mjs` is read-only: it requests only `gmail.readonly` and `calendar.readonly`, refuses any other scope, and has no send, draft, modify, label, delete or RSVP code. Every request is a GET to an allow-listed read endpoint, and a test enforces it.
+- Calendar event writes are a separate, opt-in tool, `calma-write.mjs` (see below). Mail is never written, and `calma.mjs` cannot reach the write code (a test enforces that too).
 - No account list to maintain: sign in, and calma remembers the address Google reports. Addresses never live in the repo.
 
 ## Setup
@@ -39,6 +39,20 @@ node calma.mjs uninstall --all --yes              # every token, client.json, th
 ```
 
 `uninstall` only removes files calma created in `~/.config/calma`, and names anything it kept. Then delete the cloned folder. If a revoke could not reach Google, remove calma under your Google account's Third-party access.
+
+## Calendar writes (`calma-write.mjs`)
+
+`calma.mjs` never changes anything. Creating, updating and deleting calendar events lives in a separate entry point, `calma-write.mjs`, with its own sign-in and token (`~/.config/calma/write/<address>.json`). A test checks that `calma.mjs` never imports it. It asks for the `calendar.events` scope, which Google offers only for all calendars of an account, so what it may touch is limited by an allow-list in `~/.config/calma/write.json`, not by Google.
+
+```sh
+node calma-write.mjs allow --account <email>      # who may write (once)
+node calma-write.mjs allow --calendar primary     # which calendars (once; add more ids the same way)
+node calma-write.mjs policy                       # show the allow-lists
+node calma-write.mjs auth [--no-open]             # write sign-in; refused (and revoked) for an address not allowed
+node calma-write.mjs accounts                     # addresses with a write token
+```
+
+Add `calendar.events` under Data Access on the Google consent screen first. `node calma.mjs uninstall` removes and revokes write tokens too. The create, update and delete commands come next.
 
 ## Security
 

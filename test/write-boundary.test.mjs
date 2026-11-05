@@ -1,0 +1,60 @@
+// The promise of this repo: calma.mjs is read-only. These tests make that structural, not a convention: the read side
+// (calma.mjs and everything it imports) must never reach the write side, and nothing that can change a calendar may hide
+// in the read side.
+import assert from "node:assert/strict";
+import { readFileSync, readdirSync } from "node:fs";
+import { dirname, join, relative, resolve } from "node:path";
+import { test } from "node:test";
+import { fileURLToPath } from "node:url";
+
+const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+
+/** The write side, listed on purpose: a new file there must be added here, in a PR a reviewer reads. */
+const WRITE_FILES = ["calma-write.mjs", "lib/write/oauth.mjs", "lib/write/policy.mjs", "lib/write/scopes.mjs", "lib/write/tokens.mjs"];
+
+const read = (rel) => readFileSync(join(root, rel), "utf8");
+
+/** Every file reachable from `entry` through static relative imports. Dynamic import(), require and createRequire are errors. */
+function importGraph(entry) {
+  const seen = new Set();
+  const visit = (rel) => {
+    if (seen.has(rel)) return;
+    seen.add(rel);
+    const src = read(rel);
+    assert.doesNotMatch(src, /\bimport\s*\(|\brequire\s*\(|createRequire/, `${rel}: dynamic loading would hide an import from this test`);
+    for (const m of src.matchAll(/(?:^|\n)\s*(?:import|export)\s[^;]*?from\s+["'](\.[^"']+)["']/g)) visit(relative(root, resolve(root, dirname(rel), m[1])));
+  };
+  visit(entry);
+  return [...seen].sort();
+}
+
+test("the write side is exactly the files listed here", () => {
+  const found = ["calma-write.mjs", ...readdirSync(join(root, "lib", "write")).map((f) => `lib/write/${f}`)].sort();
+  assert.deepEqual(found, [...WRITE_FILES].sort());
+});
+
+test("calma.mjs, the read-only entry point, never reaches the write side", () => {
+  const graph = importGraph("calma.mjs");
+  assert.ok(graph.includes("lib/google.mjs") && graph.includes("lib/oauth.mjs"), "the walk found the real read modules");
+  for (const f of graph) assert.ok(!WRITE_FILES.includes(f), `${f} is on the write side but calma.mjs reaches it`);
+  assert.ok(!graph.some((f) => f.startsWith("lib/write/")));
+});
+
+test("nothing in the read side holds the write scope or a calendar write call", () => {
+  for (const f of importGraph("calma.mjs")) {
+    const src = read(f);
+    assert.doesNotMatch(src, /auth\/calendar\.events/, `${f} mentions the write scope`);
+    assert.doesNotMatch(src, /sendUpdates/, `${f} mentions sendUpdates`);
+    assert.doesNotMatch(src, /method:\s*["'](?:PATCH|PUT|DELETE)["']/, `${f} has a write method`);
+  }
+});
+
+test("calma-write.mjs does reach the write modules (so the boundary test is not vacuous)", () => {
+  const graph = importGraph("calma-write.mjs");
+  for (const f of WRITE_FILES) assert.ok(graph.includes(f), `${f} is not reached from calma-write.mjs`);
+});
+
+test("the write scope is defined in one file only", () => {
+  const holders = [...WRITE_FILES, ...readdirSync(join(root, "lib")).filter((f) => f.endsWith(".mjs")).map((f) => `lib/${f}`), "calma.mjs"].filter((f) => /auth\/calendar\.events/.test(read(f)));
+  assert.deepEqual(holders, ["lib/write/scopes.mjs"]);
+});
