@@ -59,9 +59,15 @@ test("the write scope is defined in one file only", () => {
   assert.deepEqual(holders, ["lib/write/scopes.mjs"]);
 });
 
-test("the write side makes only the requests this PR allows: POST (create), plus Google's token, revoke and userinfo calls", () => {
+test("the write side makes only the requests this PR allows: POST (create), GET and PATCH (update), plus Google's token, revoke and userinfo calls; never DELETE", () => {
+  const seen = new Set();
   for (const f of WRITE_FILES) {
     const methods = [...read(f).matchAll(/(?<![\w])method:\s*["'](\w+)["']/g)].map((m) => m[1]);
-    for (const m of methods) assert.ok(m === "POST", `${f} uses method ${m}`);
+    for (const m of methods) {
+      assert.ok(["POST", "PATCH", "GET"].includes(m), `${f} uses method ${m}`);
+      seen.add(m);
+    }
+    assert.doesNotMatch(read(f), /["']DELETE["']|["']PUT["']/, `${f} mentions DELETE or PUT`);
   }
+  assert.deepEqual([...seen].sort(), ["GET", "PATCH", "POST"], "the check saw each method it allows");
 });
