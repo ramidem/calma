@@ -9,7 +9,7 @@ import { authorize } from "./lib/oauth.mjs";
 import { uninstall } from "./lib/uninstall.mjs";
 
 const emit = (obj) => process.stdout.write(`${JSON.stringify(obj)}\n`);
-const USAGE = "Usage: calma auth | accounts | mail-recent [query] | mail-thread <threadId> | calendar-week | uninstall <name>|--all [--yes]   (add --account <email> when more than one account is signed in)";
+const USAGE = "Usage: calma auth | accounts | mail-recent [query] | mail-thread <threadId> | calendar-week | uninstall --account <email>|--all [--yes]   (add --account <email> to the other commands when more than one account is signed in)";
 
 /** Splits `--account <email>` / `-a <email>`, `--yes` and `--all` from the positional words. */
 export function parseArgs(argv) {
@@ -37,8 +37,11 @@ export async function run(argv, deps = {}) {
       return out(await authorize({ emit: out, ...deps }));
     case "accounts":
       return out({ accounts: listAccounts(env) });
-    case "uninstall":
-      return out(await uninstall(flags.all ? "--all" : rest[0], { yes: flags.yes, ...deps }));
+    case "uninstall": {
+      if (flags.all && flags.account !== undefined) throw new ToolError("usage", "Use --account <email> or --all, not both.");
+      if (!flags.all && flags.account === undefined) throw new ToolError("usage", "uninstall needs --account <email> or --all. Account labels are gone. " + USAGE);
+      return out(await uninstall(flags.all ? "--all" : flags.account, { yes: flags.yes, ...deps }));
+    }
     case "mail-recent":
       return out(await mailRecent(resolveAccount(flags.account, env), rest.join(" ").trim(), deps));
     case "mail-thread":
