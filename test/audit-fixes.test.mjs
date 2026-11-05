@@ -5,7 +5,7 @@ import * as config from "../lib/config.mjs";
 import * as google from "../lib/google.mjs";
 import { fetchWithTimeout } from "../lib/net.mjs";
 import * as oauth from "../lib/oauth.mjs";
-import { SCOPE, jsonResponse, sandbox } from "./helpers.mjs";
+import { SCOPE, jsonResponse, sandbox, visit } from "./helpers.mjs";
 
 const b64 = (s) => Buffer.from(s).toString("base64url");
 
@@ -14,6 +14,7 @@ test("a callback with the wrong state is ignored and sign-in keeps waiting", asy
   rmSync(config.tokenPath("personal", env));
   const fetchFn = async (url) => (String(url).startsWith("https://oauth2.googleapis.com/token") ? jsonResponse({ access_token: "A1", refresh_token: "R1", expires_in: 3600, scope: SCOPE }) : jsonResponse({ emailAddress: "personal@example.com" }));
   let stray;
+  const pending = [];
   const emit = (e) => {
     if (e.event !== "auth_url") return;
     const u = new URL(e.url);
@@ -21,12 +22,13 @@ test("a callback with the wrong state is ignored and sign-in keeps waiting", asy
     const bad = new URL(cb);
     bad.searchParams.set("code", "EVIL");
     bad.searchParams.set("state", "wrong");
-    stray = fetch(bad).then((r) => r.status);
+    stray = visit(bad, 0);
     cb.searchParams.set("code", "CODE");
     cb.searchParams.set("state", u.searchParams.get("state"));
-    setTimeout(() => fetch(cb), 60);
+    pending.push(visit(cb, 60));
   };
-  const result = await oauth.authorize("personal", { fetchFn, env, emit, timeoutMs: 5000 });
+  const result = await oauth.authorize({ fetchFn, env, emit, timeoutMs: 5000 });
+  await Promise.all(pending);
   assert.equal(result.event, "authorized");
   assert.equal(await stray, 400);
 });
@@ -115,15 +117,17 @@ test("a stalled body during sign-in (token exchange and profile) is a timeout, a
     if (u.includes("/token")) return jsonResponse({ access_token: "A1", refresh_token: "R1", expires_in: 3600, scope: SCOPE });
     return stalledBody(200); // the profile call
   };
+  const pending = [];
   const emit = (e) => {
     if (e.event !== "auth_url") return;
     const u = new URL(e.url);
     const cb = new URL(u.searchParams.get("redirect_uri"));
     cb.searchParams.set("code", "CODE");
     cb.searchParams.set("state", u.searchParams.get("state"));
-    setTimeout(() => fetch(cb), 20);
+    pending.push(visit(cb, 20));
   };
-  await assert.rejects(oauth.authorize("personal", { fetchFn, env, emit, timeoutMs: 5000 }), { code: "timeout" });
+  await assert.rejects(oauth.authorize({ fetchFn, env, emit, timeoutMs: 5000 }), { code: "timeout" });
+  await Promise.all(pending);
   assert.deepEqual(revoked, ["R1"]);
 });
 
