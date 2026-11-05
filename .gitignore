@@ -1,0 +1,8 @@
+.env
+*.env
+accounts.env
+tokens/
+client_secret*.json
+credentials*.json
+client.json
+node_modules/
