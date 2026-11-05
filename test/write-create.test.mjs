@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { test } from "node:test";
 import * as cli from "../calma-write.mjs";
-import { buildCreateBody, createEvent, eventIdFromKey, resolveTarget, writeRequest } from "../lib/write/events.mjs";
+import { buildCreateBody, createEvent, eventIdFromKey, resolveTarget, when, writeRequest } from "../lib/write/events.mjs";
 import { logPath } from "../lib/write/log.mjs";
 import { allowAccount, allowCalendar } from "../lib/write/policy.mjs";
 import { WRITE_SCOPE } from "../lib/write/scopes.mjs";
@@ -215,4 +215,124 @@ test("the command: --yes applies, no --yes previews, and a typo'd or unsafe opti
   await assert.rejects(run(["calendar-create", "--title", "x", "--start", "2026-11-06T09:00:00+08:00", "--end", "2026-11-06T09:15:00+08:00"]), { code: "bad_event" }, "no actor");
   await assert.rejects(run([...base, "--prop", "novalue"]), { code: "usage" });
   assert.equal(calls.length, 1);
+});
+
+// ---- times are normalised to full seconds ----------------------------------------------------------------------
+
+test("a time without seconds is shown and sent with :00, for offset and Z forms; fractional seconds stay as given", async () => {
+  const env = ready();
+  const cases = [
+    [{ start: "2026-11-06T13:00+08:00", end: "2026-11-06T14:30+08:00" }, "2026-11-06T13:00:00+08:00", "2026-11-06T14:30:00+08:00"],
+    [{ start: "2026-11-06T13:00Z", end: "2026-11-06T14:30Z" }, "2026-11-06T13:00:00Z", "2026-11-06T14:30:00Z"],
+    [{ start: "2026-11-06T13:00-05:30", end: "2026-11-06T13:00:00.250-05:30" }, "2026-11-06T13:00:00-05:30", "2026-11-06T13:00:00.250-05:30"],
+    [{ start: "2026-11-06T13:00:00.125Z", end: "2026-11-06T13:00:01Z" }, "2026-11-06T13:00:00.125Z", "2026-11-06T13:00:01Z"],
+  ];
+  for (const [times, start, end] of cases) {
+    const dry = await createEvent(input(times), { env, fetchFn: google().fetchFn, now: () => NOW });
+    assert.deepEqual([dry.would_create.start, dry.would_create.end], [{ dateTime: start }, { dateTime: end }]);
+    const { calls, fetchFn } = google();
+    await createEvent(input(times), { yes: true, env, fetchFn, now: () => NOW });
+    assert.equal(calls.length, 1);
+    assert.deepEqual([calls[0].body.start, calls[0].body.end], [{ dateTime: start }, { dateTime: end }]);
+  }
+});
+
+test("the time normaliser: valid forms gain :00 only when seconds are missing; invalid ones are still refused", () => {
+  const ok = [
+    ["2026-11-06T13:00+08:00", "2026-11-06T13:00:00+08:00"],
+    ["2026-11-06T13:00Z", "2026-11-06T13:00:00Z"],
+    ["2026-11-06T00:00-12:00", "2026-11-06T00:00:00-12:00"],
+    ["2026-11-06T23:59+14:00", "2026-11-06T23:59:00+14:00"],
+    ["2028-02-29T09:30Z", "2028-02-29T09:30:00Z"],
+    ["2026-11-06T13:00:00+08:00", "2026-11-06T13:00:00+08:00"],
+    ["2026-11-06T13:00:59Z", "2026-11-06T13:00:59Z"],
+    ["2026-11-06T13:00:00.5Z", "2026-11-06T13:00:00.5Z"],
+    ["2026-11-06T13:00:00.123456+08:00", "2026-11-06T13:00:00.123456+08:00"],
+  ];
+  for (const [given, expected] of ok) assert.equal(when(given, "start", false).dateTime, expected, given);
+  const invalid = [
+    "2026-11-06T13:00", // no offset
+    "2026-11-06T13+08:00", // no minutes
+    "2026-11-06T24:00+08:00",
+    "2026-11-06T13:60Z",
+    "2026-11-06T13:00:60Z",
+    "2026-11-06T13:00+24:00",
+    "2026-11-06T13:00+08:60",
+    "2026-02-30T13:00Z",
+    "2027-02-29T13:00Z",
+    "2026-13-06T13:00Z",
+    "2026-11-06 13:00Z",
+    "2026-11-06T13:00:00",
+    "2026-11-06T13:00:Z",
+    "2026-11-06T13:00+0800",
+    "2026-11-06",
+    "tomorrow 13:00",
+    "",
+  ];
+  for (const given of invalid) assert.throws(() => when(given, "start", false), { code: "bad_event" }, JSON.stringify(given));
+  assert.throws(() => when(undefined, "start", false), { code: "bad_event" });
+  assert.throws(() => when(1762405200000, "start", false), { code: "bad_event" });
+  assert.deepEqual(when("2026-11-06", "start", true).date, "2026-11-06"); // all-day dates are untouched
+});
+
+test("a rejected time without seconds is also refused through the create path (bad_event, nothing sent)", async () => {
+  const env = ready();
+  for (const start of ["2026-11-06T13:00", "2026-11-06T25:00Z", "2026-02-30T13:00Z"]) {
+    await assert.rejects(createEvent(input({ start, end: "2026-12-06T10:00Z" }), { yes: true, env, fetchFn: async () => assert.fail("no request expected"), now: () => NOW }), { code: "bad_event" }, start);
+  }
+});
+
+// ---- a 400 names the rejected field and nothing else -----------------------------------------------------------
+
+test("a 400 names the field Google rejected, never Google's message, the body or a token", async () => {
+  const env = ready();
+  const fail400 = (error) => google(() => jsonResponse({ error }, 400)).fetchFn;
+  const run = (error) => createEvent(input(), { yes: true, env, fetchFn: fail400(error), now: () => NOW });
+  const SECRET = "WRITE-ACCESS-LEAK-4f9c1e7a2b8d-unique";
+  await assert.rejects(run({ code: 400, status: "INVALID_ARGUMENT", message: `Bad value ${SECRET} in request`, errors: [{ domain: "global", reason: "invalid", location: "start.dateTime", locationType: "other", message: SECRET }] }), (e) => {
+    assert.equal(e.code, "google_error");
+    assert.equal(e.message, "Google answered 400 (invalid) for field start.dateTime.");
+    assert.ok(!e.message.includes("LEAK") && !e.message.includes("Bad value"));
+    return true;
+  });
+  // several fields: reasons are listed once, at most three fields
+  await assert.rejects(run({ errors: [{ reason: "invalid", location: "start.dateTime" }, { reason: "invalid", location: "end.dateTime" }, { reason: "required", location: "summary" }, { reason: "invalid", location: "fourth.field" }] }), { code: "google_error", message: "Google answered 400 (invalid, required) for fields start.dateTime, end.dateTime, summary." });
+});
+
+test("a 400 with no field keeps the plain message and invents nothing", async () => {
+  const env = ready();
+  const run = (body) => createEvent(input(), { yes: true, env, fetchFn: google(() => jsonResponse(body, 400)).fetchFn, now: () => NOW });
+  const plain = { code: "google_error", message: "Google answered 400 (INVALID_ARGUMENT)." };
+  await assert.rejects(run({ error: { status: "INVALID_ARGUMENT", message: "WRITE-ACCESS-LEAK free text" } }), plain);
+  await assert.rejects(run({ error: { status: "INVALID_ARGUMENT", errors: [] } }), plain);
+  await assert.rejects(run({ error: { status: "INVALID_ARGUMENT", errors: [{ reason: "invalid" }] } }), plain);
+  await assert.rejects(run({ error: { status: "INVALID_ARGUMENT", errors: [{ reason: "invalid", location: "  \"'<> " }] } }), plain);
+  await assert.rejects(run({ error: { status: "INVALID_ARGUMENT", errors: [{ reason: "invalid", location: 42 }, null, "text"] } }), plain);
+  await assert.rejects(run({ error: { status: "INVALID_ARGUMENT", errors: "start.dateTime" } }), plain);
+  await assert.rejects(run(null), { code: "google_error", message: "Google answered 400 (400)." });
+});
+
+test("hostile reason and location text is sanitised and capped", async () => {
+  const env = ready();
+  const long = "a".repeat(500);
+  const run = (errors) => createEvent(input(), { yes: true, env, fetchFn: google(() => jsonResponse({ error: { errors } }, 400)).fetchFn, now: () => NOW });
+  await assert.rejects(run([{ reason: 'in valid"\'<script>', location: 'start. dateTime"; Bearer WRITE-ACCESS-LEAK /x\n' }]), (e) => {
+    assert.match(e.message, /^Google answered 400 \([A-Za-z0-9_.[\]-]*\) for field [A-Za-z0-9_.[\]-]+\.$/);
+    assert.ok(!/[ "'<>;\n/]/.test(e.message.replace(/^Google answered 400 \(|\) for field | |\.$/g, "")));
+    return true;
+  });
+  await assert.rejects(run([{ reason: long, location: long }]), (e) => {
+    assert.equal(e.message, `Google answered 400 (${"a".repeat(60)}) for field ${"a".repeat(60)}.`);
+    return true;
+  });
+  await assert.rejects(run([{ reason: "r", location: "items[0].x-y_z" }]), { message: "Google answered 400 (r) for field items[0].x-y_z." });
+});
+
+test("other statuses keep their handling", async () => {
+  const env = ready();
+  const run = (status, body) => createEvent(input(), { yes: true, env, fetchFn: google(() => jsonResponse(body, status)).fetchFn, now: () => NOW });
+  const named = { error: { status: "PERMISSION_DENIED", errors: [{ reason: "forbidden", location: "start.dateTime" }] } };
+  await assert.rejects(run(403, named), { code: "google_error", message: "Google answered 403 (PERMISSION_DENIED)." });
+  await assert.rejects(run(500, named), { code: "google_error", message: "Google answered 500 (PERMISSION_DENIED)." });
+  await assert.rejects(run(401, named), { code: "reauth_needed" });
 });
