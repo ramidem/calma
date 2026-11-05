@@ -3,6 +3,7 @@ import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import * as accounts from "../lib/accounts.mjs";
 import * as config from "../lib/config.mjs";
 import * as google from "../lib/google.mjs";
 import * as oauth from "../lib/oauth.mjs";
@@ -29,7 +30,7 @@ test("the auth URL asks for exactly the two read-only scopes", () => {
 
 test("the code has no send, draft, modify, label, delete or RSVP function", () => {
   const forbidden = /send|draft|modify|label|delete|trash|untrash|rsvp|respond|insert|patch|update|create|import|watch|archive|spam|star/i;
-  for (const mod of [config, google, oauth, uninstallMod, cli]) {
+  for (const mod of [accounts, config, google, oauth, uninstallMod, cli]) {
     for (const [name, value] of Object.entries(mod)) {
       if (typeof value !== "function") continue;
       assert.doesNotMatch(name, forbidden, `exported function ${name}`);
