@@ -53,11 +53,20 @@ node calma-write.mjs accounts                     # addresses with a write token
 
 node calma-write.mjs calendar-create --title <text> --start <time> --end <time> --actor <label>          # dry run: shows what it would create
 node calma-write.mjs calendar-create ... --yes                                                          # creates it
+
+node calma-write.mjs calendar-update <eventId> --title <text> --actor <label>                           # dry run: reads the event, shows before and after
+node calma-write.mjs calendar-update <eventId> ... --yes                                                # applies it
 ```
 
 `calendar-create` options: `--all-day` (dates, end optional and exclusive), `--description`, `--location`, `--free` (does not block time), `--private`, `--prop name=value` (private properties, repeatable), `--calendar <id>` (default `primary`, must be on the allow-list), `--account <email>`, and `--key <text>` (a retry with the same key cannot create a duplicate: Google answers 409, reported as `already_exists`). Times need an offset, like `2026-11-06T09:00:00+08:00`. `--actor` is required: a short label for who is asking, recorded in `write.log` with the event id (never the title). Every created event is marked (`calma=1`, `calma_actor`, `calma_created`), has no guests and no recurrence, and never emails anyone (`sendUpdates=none`). Options it does not know, such as `--attendee`, are refused.
 
-Add `calendar.events` under Data Access on the Google consent screen first. `node calma.mjs uninstall` removes and revokes write tokens too. Update and delete come next.
+`calendar-update` changes one event: `--title`, `--start`, `--end`, `--all-day`, `--description`, `--location`, `--free`/`--busy`, `--private`/`--public`, `--prop name=value`, with the same `--actor`, `--calendar`, `--account` and `--yes` as create. It reads the event first and sends only what differs, with the etag it read (`If-Match`): if the event changed in between, you get `changed_meanwhile` and nothing is overwritten. A new `--start` without `--end` keeps the event's length. A field can be changed but not blanked. Applied updates set `calma_updated` and `calma_updated_by` and add a `write.log` line. Refused:
+
+- `not_a_calma_event`: the event has no calma marker (it was made by hand). Only the owner passes `--any-event` to allow that.
+- `has_guests`, `recurring_event`, `event_cancelled`: always, no flag overrides these.
+- `nothing_to_change`: the event already looks like that. The marker properties (`calma*`) can never be set or removed with `--prop`.
+
+Add `calendar.events` under Data Access on the Google consent screen first. `node calma.mjs uninstall` removes and revokes write tokens too. Delete comes next.
 
 ## Security
 

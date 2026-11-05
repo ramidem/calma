@@ -8,7 +8,7 @@ Writers: Schedule, Parenting and Grook; personal account only, never the kids' a
 
 - [x] PR 1: scope split, write token store, `calma-write auth`, allow-list, import-graph test, uninstall removes write tokens.
 - [x] PR 2: `calendar-create` (dry run, validation, marker, no guests, `sendUpdates=none`, write log, `--key` for retry safety).
-- [ ] PR 3: `calendar-update` (own events freely; others need `--any-event`).
+- [x] PR 3: `calendar-update` (own events freely; others need `--any-event`; etag check; no guests, series or cancelled events).
 - [ ] PR 4: `calendar-delete` (id + `--yes`, title shown first, refuses guests, series and unmarked events).
 - [ ] PR 5: docs: README, SECURITY.md, CONTRIBUTING.md and the repo description say what is true.
 - [ ] Med: add `calendar.events` on the Google consent screen, then `node calma-write.mjs allow --account <email>`, `allow --calendar primary`, and `auth`.
