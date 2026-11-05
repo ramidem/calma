@@ -9,11 +9,11 @@ import { authorize } from "./lib/oauth.mjs";
 import { uninstall } from "./lib/uninstall.mjs";
 
 const emit = (obj) => process.stdout.write(`${JSON.stringify(obj)}\n`);
-const USAGE = "Usage: calma auth | accounts | mail-recent [query] | mail-thread <threadId> | calendar-week | uninstall --account <email>|--all [--yes]   (add --account <email> to the other commands when more than one account is signed in)";
+const USAGE = "Usage: calma auth [--no-open] | accounts | mail-recent [query] | mail-thread <threadId> | calendar-week | uninstall --account <email>|--all [--yes]   (add --account <email> to the other commands when more than one account is signed in)";
 
-/** Splits `--account <email>` / `-a <email>`, `--yes` and `--all` from the positional words. */
+/** Splits `--account <email>` / `-a <email>`, `--yes`, `--all` and `--no-open` from the positional words. */
 export function parseArgs(argv) {
-  const flags = { account: undefined, yes: false, all: false };
+  const flags = { account: undefined, yes: false, all: false, open: true };
   const words = [];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -22,6 +22,7 @@ export function parseArgs(argv) {
       flags.account = argv[++i];
     } else if (a === "--yes") flags.yes = true;
     else if (a === "--all") flags.all = true;
+    else if (a === "--no-open") flags.open = false;
     else words.push(a);
   }
   return { cmd: words[0], rest: words.slice(1), flags };
@@ -34,7 +35,7 @@ export async function run(argv, deps = {}) {
   const env = deps.env ?? process.env;
   switch (cmd) {
     case "auth":
-      return out(await authorize({ emit: out, ...deps }));
+      return out(await authorize({ emit: out, ...(flags.open ? {} : { open: null }), ...deps }));
     case "accounts":
       return out({ accounts: listAccounts(env) });
     case "uninstall": {
