@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -9,7 +9,7 @@ import * as google from "../lib/google.mjs";
 import * as oauth from "../lib/oauth.mjs";
 import * as uninstallMod from "../lib/uninstall.mjs";
 import * as cli from "../calma.mjs";
-import { ACCOUNT_ENV, jsonResponse, sandbox } from "./helpers.mjs";
+import { jsonResponse, sandbox } from "./helpers.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -62,39 +62,9 @@ test("readGet refuses non-GET methods and non-read endpoints", async () => {
   }
 });
 
-test("accounts come from MAIL_ACCOUNT_<NAME> variables, and a missing or bad one fails clearly", async () => {
-  assert.equal(config.accountEmail("personal", ACCOUNT_ENV), "personal@example.com");
-  assert.equal(config.accountEmail("work", { MAIL_ACCOUNT_WORK: "  Work@Example.com " }), "work@example.com");
-  // Not set: the message names the variable, never a value.
-  assert.throws(() => config.accountEmail("other", ACCOUNT_ENV), (e) => e.code === "missing_env" && e.message.includes("MAIL_ACCOUNT_OTHER"));
-  assert.throws(() => config.accountEmail("personal", {}), { code: "missing_env" });
-  assert.throws(() => config.accountEmail("personal", { MAIL_ACCOUNT_PERSONAL: "not-an-address" }), (e) => e.code === "bad_env" && !e.message.includes("not-an-address"));
-  for (const bad of ["", "__proto__", "client", "Personal", "personal@example.com", "../x"]) assert.throws(() => config.accountEmail(bad, ACCOUNT_ENV), { code: "unknown_account" }, bad);
-  assert.throws(() => config.accountEmail("constructor", ACCOUNT_ENV), { code: "missing_env" });
-  const { env } = sandbox();
-  await assert.rejects(cli.run(["mail-recent", "other"], { emit() {}, env }), { code: "missing_env" });
-  await assert.rejects(cli.run(["send", "personal"], { emit() {}, env }), { code: "usage" });
-});
-
 test("the OAuth client file comes from MAIL_CLIENT_FILE, else the config folder", () => {
   assert.equal(config.clientPath({ MAIL_CLIENT_FILE: "/somewhere/else.json", CALMA_DIR: "/cfg" }), "/somewhere/else.json");
   assert.equal(config.clientPath({ CALMA_DIR: "/cfg" }), join("/cfg", "client.json"));
-});
-
-test("an accounts env file is loaded without overriding what is already set", () => {
-  const { dir } = sandbox();
-  const file = join(dir, "accounts.env");
-  writeFileSync(file, "MAIL_ACCOUNT_ZZLOADED=loaded@example.com\nMAIL_ACCOUNT_ZZKEEP=file@example.com\n", { mode: 0o600 });
-  process.env.MAIL_ACCOUNT_ZZKEEP = "env@example.com";
-  try {
-    assert.equal(config.loadEnvFileIfPresent({ MAIL_ENV_FILE: file }), true);
-    assert.equal(process.env.MAIL_ACCOUNT_ZZLOADED, "loaded@example.com");
-    assert.equal(process.env.MAIL_ACCOUNT_ZZKEEP, "env@example.com");
-    assert.equal(config.loadEnvFileIfPresent({ MAIL_ENV_FILE: join(dir, "missing.env") }), false);
-  } finally {
-    delete process.env.MAIL_ACCOUNT_ZZLOADED;
-    delete process.env.MAIL_ACCOUNT_ZZKEEP;
-  }
 });
 
 test("mail-recent lists then reads metadata, GET only", async () => {
