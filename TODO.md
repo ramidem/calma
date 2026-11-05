@@ -4,9 +4,9 @@ Workflow: each item below is its own branch, made in its own git worktree (`git 
 
 ## Open
 
-- [x] Pin Node 22 with `.nvmrc` and use it in CI (PR #4).
+- [ ] Pin Node 22 with `.nvmrc` and use it in CI (PR #4; tick when it merges).
 - [x] Merge PR #3 (revoke on refusal, stalled-body timeout, 5-request cap, HTML entities).
-- [ ] Check the first GitHub Actions run (tests pass locally on Node 22 and 26).
+- [ ] Check the CI run on `main` after the next merge (the `test` job was green on PRs #4 and #5; tests also pass locally on Node 22 and 26).
 - [ ] Commit b4209f2 has a personal Gmail as author. Decided: leave the history as it is. Nothing to do unless that changes.
 
 ## Sign in without typing an address
@@ -22,7 +22,8 @@ Workflow: each item below is its own branch, made in its own git worktree (`git 
 - [ ] `lib/oauth.mjs`: read `emailAddress` from the profile; if missing or invalid, refuse and revoke (as today); else save as `<address>.json`, print `{"event":"authorized","account":"<address>"}`.
 - [ ] `calma.mjs`: parse `--account`/`-a`, `--yes`, `--all`; commands use the resolved address; update the usage text.
 - [ ] `calma.mjs`: add `accounts` (lists signed-in addresses, never a token).
-- [ ] `lib/uninstall.mjs`: target is `--account <email>` or `--all`; drop the `accounts.env` handling.
+- [ ] `lib/uninstall.mjs`: target is `--account <email>` or `--all`; the new code no longer writes or reads `accounts.env`, but `--all` still removes a leftover one.
+- [ ] Old versions: a token saved as `<label>.json` (and any `accounts.env`) is ignored by `listAccounts()` because its name is not an address. `accounts` and the commands say `reauth_needed` / run `auth` again; `uninstall --all` still removes a leftover label token and `accounts.env`. One line in the README's upgrade note. Test it.
 
 ### Tests (placeholders `@example.com` only)
 
@@ -30,6 +31,7 @@ Workflow: each item below is its own branch, made in its own git worktree (`git 
 - [ ] A profile with no `emailAddress` is refused and the grant revoked.
 - [ ] `normalizeEmail` rejects `../x@example.com`, `a/b@example.com`, empty and double `@`.
 - [ ] One account needs no flag; two need `--account`; none gives `reauth_needed`.
+- [ ] Two spellings of one address (`Me@Example.com`, ` me@example.com `) give the same token file, so `--account` and the saved file name always agree.
 - [ ] `accounts` lists addresses and no token.
 - [ ] `uninstall --account` and `--all` still pass; the old `<label>` form is rejected with a clear message.
 - [ ] `no-personal-info.test.mjs`: drop the `MAIL_ACCOUNT_*` runtime words and the `.env.example` check.
