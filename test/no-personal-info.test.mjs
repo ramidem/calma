@@ -39,11 +39,20 @@ export function findPii(text, { hashes = NAME_HASHES, words = [] } = {}) {
   return problems;
 }
 
+/**
+ * The words that identify a person in an address: its local part and the pieces of it. Not the domain: "gmail" or "edu"
+ * are ordinary words in the docs, and the email check already catches any address that is not @example.com.
+ */
+export function identifyingWords(address) {
+  const local = address.split("@")[0].toLowerCase();
+  return [local, ...local.split(/[^a-z0-9]+/)].filter(Boolean);
+}
+
 function runtimeWords() {
   const words = (process.env.PII_DENYLIST ?? "").split(",").map((w) => w.trim());
   for (const address of listAccounts(process.env)) {
     if (address.endsWith("@example.com")) continue; // placeholders used by the tests
-    words.push(address.split("@")[0], ...address.split(/[^a-z0-9]+/));
+    words.push(...identifyingWords(address));
   }
   return words.filter(Boolean);
 }
@@ -66,6 +75,16 @@ test("the scanner flags what it should (so it can't pass by being blind)", () =>
   assert.equal(findPii("hello zzname", { hashes: new Set([sha("zzname")]) }).length, 1);
   assert.equal(findPii("hello world", { words: ["zzname"], hashes: new Set([sha("zzname")]) }).length, 0);
   assert.equal(NAME_HASHES.size, 6);
+});
+
+test("only the local part of a signed-in address is a denied word, never its domain", () => {
+  const at = (local, domain) => `${local}@${domain}`;
+  assert.deepEqual(identifyingWords(at("Jane.Doe", "gmail.com")), ["jane.doe", "jane", "doe"]);
+  assert.deepEqual(identifyingWords(at("zz-name_x", "school.edu.ph")), ["zz-name_x", "zz", "name", "x"]);
+  // So a machine signed in with a webmail or school address does not make "gmail", "school" or "edu" fail the scan.
+  const text = "Gmail and Calendar. school edu";
+  assert.equal(findPii(text, { words: identifyingWords(at("jane.doe", "gmail.com")) }).length, 0);
+  assert.equal(findPii("jane wrote this", { words: identifyingWords(at("jane.doe", "gmail.com")) }).length, 1);
 });
 
 test("this folder holds no email address except example.com and no hardcoded name", () => {
