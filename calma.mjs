@@ -4,12 +4,12 @@ import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { listAccounts, resolveAccount } from "./lib/accounts.mjs";
 import { ToolError } from "./lib/config.mjs";
-import { calendarWeek, mailRecent, mailThread } from "./lib/google.mjs";
+import { calendarWeek, mailRecent, mailThread, mailToday } from "./lib/google.mjs";
 import { authorize } from "./lib/oauth.mjs";
 import { uninstall } from "./lib/uninstall.mjs";
 
 const emit = (obj) => process.stdout.write(`${JSON.stringify(obj)}\n`);
-const USAGE = "Usage: calma auth [--no-open] | accounts | mail-recent [query] | mail-thread <threadId> | calendar-week | uninstall --account <email>|--all [--yes]   (add --account <email> to the other commands when more than one account is signed in)";
+const USAGE = "Usage: calma auth [--no-open] | accounts | mail-recent [query] | mail-today [query] | mail-thread <threadId> | calendar-week | uninstall --account <email>|--all [--yes]   (add --account <email> to the other commands when more than one account is signed in)";
 
 /** Splits `--account <email>` / `-a <email>`, `--yes`, `--all` and `--no-open` from the positional words. */
 export function parseArgs(argv) {
@@ -45,6 +45,8 @@ export async function run(argv, deps = {}) {
     }
     case "mail-recent":
       return out(await mailRecent(resolveAccount(flags.account, env), rest.join(" ").trim(), deps));
+    case "mail-today":
+      return out(await mailToday(resolveAccount(flags.account, env), rest.join(" ").trim(), deps));
     case "mail-thread":
       return out(await mailThread(resolveAccount(flags.account, env), rest[0], deps));
     case "calendar-week":
