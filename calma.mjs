@@ -6,16 +6,18 @@ import { fileURLToPath } from "node:url";
 import { ToolError, accountEmail, loadEnvFileIfPresent } from "./lib/config.mjs";
 import { calendarWeek, mailRecent, mailThread } from "./lib/google.mjs";
 import { authorize } from "./lib/oauth.mjs";
+import { uninstall } from "./lib/uninstall.mjs";
 
 const emit = (obj) => process.stdout.write(`${JSON.stringify(obj)}\n`);
-const USAGE = "Usage: calma auth <name> | mail-recent <name> [query] | mail-thread <name> <threadId> | calendar-week <name>   (<name> is the label of a MAIL_ACCOUNT_<NAME> variable)";
+const USAGE = "Usage: calma auth <name> | mail-recent <name> [query] | mail-thread <name> <threadId> | calendar-week <name> | uninstall <name>|--all [--yes]   (<name> is the label of a MAIL_ACCOUNT_<NAME> variable)";
 
 export async function run(argv, deps = {}) {
   const [cmd, name, ...rest] = argv;
   if (!cmd) throw new ToolError("usage", USAGE);
   if (name === undefined) throw new ToolError("usage", USAGE);
-  accountEmail(name, deps.env ?? process.env);
   const out = deps.emit ?? emit;
+  if (cmd === "uninstall") return out(await uninstall(name, { yes: rest.includes("--yes"), ...deps }));
+  accountEmail(name, deps.env ?? process.env);
   switch (cmd) {
     case "auth":
       return out(await authorize(name, { emit: out, ...deps }));

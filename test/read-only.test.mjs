@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import * as config from "../lib/config.mjs";
 import * as google from "../lib/google.mjs";
 import * as oauth from "../lib/oauth.mjs";
+import * as uninstallMod from "../lib/uninstall.mjs";
 import * as cli from "../calma.mjs";
 import { ACCOUNT_ENV, jsonResponse, sandbox } from "./helpers.mjs";
 
@@ -28,7 +29,7 @@ test("the auth URL asks for exactly the two read-only scopes", () => {
 
 test("the code has no send, draft, modify, label, delete or RSVP function", () => {
   const forbidden = /send|draft|modify|label|delete|trash|untrash|rsvp|respond|insert|patch|update|create|import|watch|archive|spam|star/i;
-  for (const mod of [config, google, oauth, cli]) {
+  for (const mod of [config, google, oauth, uninstallMod, cli]) {
     for (const [name, value] of Object.entries(mod)) {
       if (typeof value !== "function") continue;
       assert.doesNotMatch(name, forbidden, `exported function ${name}`);
