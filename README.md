@@ -56,6 +56,9 @@ node calma-write.mjs calendar-create ... --yes                                  
 
 node calma-write.mjs calendar-update <eventId> --title <text> --actor <label>                           # dry run: reads the event, shows before and after
 node calma-write.mjs calendar-update <eventId> ... --yes                                                # applies it
+
+node calma-write.mjs calendar-delete <eventId> --actor <label>                                          # dry run: reads the event, shows what would be deleted
+node calma-write.mjs calendar-delete <eventId> --actor <label> --yes                                    # deletes it
 ```
 
 `calendar-create` options: `--all-day` (dates, end optional and exclusive), `--description`, `--location`, `--free` (does not block time), `--private`, `--prop name=value` (private properties, repeatable), `--calendar <id>` (default `primary`, must be on the allow-list), `--account <email>`, and `--key <text>` (a retry with the same key cannot create a duplicate: Google answers 409, reported as `already_exists`). Times need an offset, like `2026-11-06T09:00:00+08:00`. `--actor` is required: a short label for who is asking, recorded in `write.log` with the event id (never the title). Every created event is marked (`calma=1`, `calma_actor`, `calma_created`), has no guests and no recurrence, and never emails anyone (`sendUpdates=none`). Options it does not know, such as `--attendee`, are refused.
@@ -66,7 +69,16 @@ node calma-write.mjs calendar-update <eventId> ... --yes                        
 - `has_guests`, `recurring_event`, `event_cancelled`: always, no flag overrides these.
 - `nothing_to_change`: the event already looks like that. The marker properties (`calma*`) can never be set or removed with `--prop`.
 
-Add `calendar.events` under Data Access on the Google consent screen first. `node calma.mjs uninstall` removes and revokes write tokens too. Delete comes next.
+`calendar-delete <eventId>` deletes one event, with `--actor`, `--calendar`, `--account` and `--yes` as above. The dry run (the default) reads the event and shows its id, title, start, end, whether it carries the calma marker and what would be deleted; it sends no DELETE and writes no log line. With `--yes` it reads the event again right before the DELETE, judges that fresh copy, then sends one `DELETE` with `sendUpdates=none` (no `If-Match`) and adds a `write.log` line (op `delete`, the event id, account, calendar and actor; never the title). The title is printed in the output. Refused:
+
+- `has_guests`, `recurring_event`, `event_cancelled`: always, no flag overrides these.
+- `not_a_calma_event`: the event has no calma marker. Only the owner passes `--any-event` to allow that.
+- `not_found`: Google says the event does not exist or is already deleted (404 or 410); nothing is logged.
+- Options that belong to other commands (`--title`, `--start`, `--key`, `--prop`, `--busy`, `--public`, ...) and anything unknown, such as `--attendee` or `--send-updates`.
+
+The tool does not ask for any other approval: the owner's per-operation yes for bots is an instruction rule, not a check calma-write makes.
+
+Add `calendar.events` under Data Access on the Google consent screen first. `node calma.mjs uninstall` removes and revokes write tokens too.
 
 ## Security
 

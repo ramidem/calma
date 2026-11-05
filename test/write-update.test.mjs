@@ -317,11 +317,14 @@ test("allow-list and input failures happen before any request", async () => {
   assert.equal(calls[1].url, calls[0].url);
 });
 
-test("the request layer allows GET and PATCH of one event and still refuses DELETE, PUT and every other path", async () => {
+test("the request layer allows GET and PATCH of one event; DELETE only on /events/<id>, PUT never, and every other path is refused", async () => {
   const { calls, fetchFn } = google();
   const call = (over) => writeRequest({ method: "GET", calendar: "primary", rest: `/events/${EID}`, token: "T", ...over }, { fetchFn });
   const patch = (over) => call({ method: "PATCH", body: { summary: "x" }, ifMatch: ETAG, ...over });
-  for (const method of ["DELETE", "PUT", "HEAD", "get"]) await assert.rejects(call({ method }), { code: "write_refused" }, method);
+  for (const method of ["PUT", "HEAD", "get", "delete"]) await assert.rejects(call({ method }), { code: "write_refused" }, method);
+  await assert.rejects(call({ method: "DELETE", rest: "/events" }), { code: "write_refused" }, "DELETE of the collection");
+  await assert.rejects(call({ method: "DELETE", rest: "/acl" }), { code: "write_refused" }, "DELETE of another path");
+  await assert.rejects(call({ method: "DELETE", rest: `/events/${EID}/instances` }), { code: "write_refused" }, "DELETE below an event");
   for (const rest of ["/events", "/events/", "/events/abc", "/events/EVT1ABC2DEF3", `/events/${EID}/instances`, `/events/${EID}/move`, `/events/${EID}?x=1`, `/events/${EID}/../acl`, "/acl", "/settings", ""]) {
     await assert.rejects(call({ rest }), { code: "write_refused" }, rest);
     await assert.rejects(patch({ rest }), { code: "write_refused" }, rest);
