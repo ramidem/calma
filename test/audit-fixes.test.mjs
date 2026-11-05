@@ -90,3 +90,70 @@ test("mail-recent fetches the messages in parallel and keeps their order", async
   assert.deepEqual(out.messages.map((m) => m.id), ["0a1b2cd1", "0a1b2cd2", "0a1b2cd3"]);
   assert.ok(peak > 1, `peak concurrency ${peak}`);
 });
+
+const stalledBody = (status = 200) => ({ ok: status < 400, status, json: async () => { throw new DOMException("The operation was aborted due to timeout", "TimeoutError"); } });
+
+test("a stalled response body ends as a timeout error, not 'unexpected' or a misleading message", async () => {
+  const { env } = sandbox();
+  // Success path and error path of a read.
+  await assert.rejects(google.readGet("https://gmail.googleapis.com/gmail/v1/users/me/messages", "t", { fetchFn: async () => stalledBody(200) }), { code: "timeout" });
+  await assert.rejects(google.readGet("https://gmail.googleapis.com/gmail/v1/users/me/messages", "t", { fetchFn: async () => stalledBody(500) }), { code: "timeout" });
+  // Token refresh: not "incomplete token response".
+  const expired = sandbox({ expiresAt: 0 }).env;
+  await assert.rejects(oauth.accessToken("personal", { fetchFn: async () => stalledBody(200), env: expired }), { code: "timeout" });
+  await assert.rejects(oauth.accessToken("personal", { fetchFn: async () => stalledBody(400), env: expired }), { code: "timeout" });
+  assert.ok(env);
+});
+
+test("a stalled body during sign-in (token exchange and profile) is a timeout, and the grant is still revoked", async () => {
+  const { env } = sandbox({ token: false });
+  rmSync(config.tokenPath("personal", env));
+  const revoked = [];
+  const fetchFn = async (url, init) => {
+    const u = String(url);
+    if (u.includes("/revoke")) return revoked.push(new URLSearchParams(init.body).get("token")), jsonResponse({});
+    if (u.includes("/token")) return jsonResponse({ access_token: "A1", refresh_token: "R1", expires_in: 3600, scope: SCOPE });
+    return stalledBody(200); // the profile call
+  };
+  const emit = (e) => {
+    if (e.event !== "auth_url") return;
+    const u = new URL(e.url);
+    const cb = new URL(u.searchParams.get("redirect_uri"));
+    cb.searchParams.set("code", "CODE");
+    cb.searchParams.set("state", u.searchParams.get("state"));
+    setTimeout(() => fetch(cb), 20);
+  };
+  await assert.rejects(oauth.authorize("personal", { fetchFn, env, emit, timeoutMs: 5000 }), { code: "timeout" });
+  assert.deepEqual(revoked, ["R1"]);
+});
+
+test("a body that is not JSON is a clear error on a read, and {} where a field check follows", async () => {
+  const bad = async () => ({ ok: true, status: 200, json: async () => { throw new SyntaxError("Unexpected token"); } });
+  await assert.rejects(google.readGet("https://gmail.googleapis.com/gmail/v1/users/me/messages", "t", { fetchFn: bad }), { code: "google_error" });
+  const { env } = sandbox({ expiresAt: 0 });
+  await assert.rejects(oauth.accessToken("personal", { fetchFn: bad, env }), { code: "token_error" });
+});
+
+test("mail-recent never has more than 5 metadata requests in flight", async () => {
+  const { env } = sandbox();
+  let inFlight = 0;
+  let peak = 0;
+  const ids = Array.from({ length: 20 }, (_, i) => `0a1b2c${String(i).padStart(2, "0")}`);
+  const fetchFn = async (url) => {
+    const u = new URL(url);
+    if (u.pathname.endsWith("/messages")) return jsonResponse({ messages: ids.map((id) => ({ id })) });
+    inFlight++;
+    peak = Math.max(peak, inFlight);
+    await new Promise((r) => setTimeout(r, 5));
+    inFlight--;
+    const id = u.pathname.split("/").pop();
+    return jsonResponse({ id, threadId: id, payload: { headers: [] } });
+  };
+  const out = await google.mailRecent("personal", "", { fetchFn, env });
+  assert.deepEqual(out.messages.map((m) => m.id), ids);
+  assert.ok(peak > 1 && peak <= 5, `peak ${peak}`);
+});
+
+test("HTML entities: numeric, hex and common named ones decode; unknown ones and double-encoding stay as written", () => {
+  assert.equal(google.htmlToText("It&#8217;s &rsquo;fine&rsquo; &#x41; &ndash; caf&eacute; &amp;lt; &#0; &#1114112;"), "It’s ’fine’ A – caf&eacute; &lt; &#0; &#1114112;");
+});
