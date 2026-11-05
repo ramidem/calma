@@ -59,15 +59,17 @@ test("the write scope is defined in one file only", () => {
   assert.deepEqual(holders, ["lib/write/scopes.mjs"]);
 });
 
-test("the write side makes only the requests this PR allows: POST (create), GET and PATCH (update), plus Google's token, revoke and userinfo calls; never DELETE", () => {
+test("the write side makes only the requests it allows: POST (create), GET, PATCH (update) and DELETE (delete), plus Google's token, revoke and userinfo calls; DELETE only in events.mjs; PUT nowhere", () => {
   const seen = new Set();
   for (const f of WRITE_FILES) {
     const methods = [...read(f).matchAll(/(?<![\w])method:\s*["'](\w+)["']/g)].map((m) => m[1]);
     for (const m of methods) {
-      assert.ok(["POST", "PATCH", "GET"].includes(m), `${f} uses method ${m}`);
+      assert.ok(["POST", "PATCH", "GET", "DELETE"].includes(m), `${f} uses method ${m}`);
+      if (m === "DELETE") assert.equal(f, "lib/write/events.mjs", `${f} uses DELETE, which only lib/write/events.mjs may`);
       seen.add(m);
     }
-    assert.doesNotMatch(read(f), /["']DELETE["']|["']PUT["']/, `${f} mentions DELETE or PUT`);
+    assert.doesNotMatch(read(f), /["']PUT["']/, `${f} mentions PUT`);
+    if (f !== "lib/write/events.mjs") assert.doesNotMatch(read(f), /["']DELETE["']/, `${f} mentions DELETE`);
   }
-  assert.deepEqual([...seen].sort(), ["GET", "PATCH", "POST"], "the check saw each method it allows");
+  assert.deepEqual([...seen].sort(), ["DELETE", "GET", "PATCH", "POST"], "the check saw each method it allows");
 });
