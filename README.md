@@ -46,7 +46,7 @@ Report vulnerabilities as in [SECURITY.md](SECURITY.md).
 ## Development
 
 ```sh
-nvm use     # Node 22, from .nvmrc
+nvm use     # Node 22 from .nvmrc (22 or newer works)
 npm test    # no network, no secrets
 ```
 
