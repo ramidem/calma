@@ -1,0 +1,11 @@
+{
+  "name": "readonly-mail",
+  "private": true,
+  "type": "module",
+  "description": "Read-only Gmail and Calendar JSON for the owner's accounts. No dependencies; not part of the app.",
+  "engines": { "node": ">=22" },
+  "bin": { "readonly-mail": "./readonly-mail.mjs" },
+  "scripts": {
+    "test": "node --test \"test/*.test.mjs\""
+  }
+}
