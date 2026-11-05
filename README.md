@@ -31,9 +31,19 @@ node calma.mjs mail-thread <name> <threadId>      # hex id from mail-recent
 node calma.mjs calendar-week <name>               # Monday to next Monday
 ```
 
+## Uninstall
+
+```sh
+node calma.mjs uninstall <name>          # dry run: lists what it would remove
+node calma.mjs uninstall <name> --yes    # revoke that account at Google, delete its token
+node calma.mjs uninstall --all --yes     # every token, plus client.json and accounts.env, then the empty folder
+```
+
+It only removes files calma created in `~/.config/calma`. Then delete the cloned folder. If a revoke could not reach Google, remove calma under your Google account's Third-party access.
+
 ## Security
 
-Token files are plain files: any process running as you can read them. Delete `~/.config/calma/<name>.json` and revoke the app in your Google account to cut access. Nothing secret is ever printed or logged.
+Token files are plain files: any process running as you can read them. Run `uninstall` (above) to cut access. Nothing secret is ever printed or logged.
 
 Report vulnerabilities as in [SECURITY.md](SECURITY.md).
 
