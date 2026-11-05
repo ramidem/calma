@@ -6,11 +6,11 @@ import { fileURLToPath } from "node:url";
 import { ToolError } from "./lib/config.mjs";
 import { allowAccount, allowCalendar, loadPolicy } from "./lib/write/policy.mjs";
 import { authorizeWrite } from "./lib/write/oauth.mjs";
-import { createEvent, updateEvent } from "./lib/write/events.mjs";
+import { createEvent, deleteEvent, updateEvent } from "./lib/write/events.mjs";
 import { listWriteAccounts } from "./lib/write/tokens.mjs";
 
 const emit = (obj) => process.stdout.write(`${JSON.stringify(obj)}\n`);
-const USAGE = "Usage: calma-write auth [--no-open] | accounts | policy | allow --account <email> | allow --calendar <id> | calendar-create --title <text> --start <time> [--end <time>] [--all-day] --actor <label> [--yes] [options] | calendar-update <eventId> [--title <text>] [--start <time>] [--end <time>] [--all-day] [--description <text>] [--location <text>] [--free|--busy] [--private|--public] [--prop name=value] --actor <label> [--any-event] [--yes]";
+const USAGE = "Usage: calma-write auth [--no-open] | accounts | policy | allow --account <email> | allow --calendar <id> | calendar-create --title <text> --start <time> [--end <time>] [--all-day] --actor <label> [--yes] [options] | calendar-update <eventId> [--title <text>] [--start <time>] [--end <time>] [--all-day] [--description <text>] [--location <text>] [--free|--busy] [--private|--public] [--prop name=value] --actor <label> [--any-event] [--yes] | calendar-delete <eventId> --actor <label> [--account <email>] [--calendar <id>] [--any-event] [--yes]";
 
 // Options that take a value, and plain switches. Anything else starting with "-" is refused, so a typo like --attendee
 // fails loudly instead of being ignored.
@@ -67,6 +67,11 @@ export async function run(argv, deps = {}) {
       if (rest.length !== 1) throw new ToolError("usage", `calendar-update needs one event id. ${USAGE}`);
       refuseFor(cmd, flags, [["--key", "key"]]);
       return out(await updateEvent({ id: rest[0], title: flags.title, start: flags.start, end: flags.end, allDay: flags.allDay, description: flags.description, location: flags.location, free: flags.free, busy: flags.busy, private: flags.private, public: flags.public, props: flags.props, actor: flags.actor, anyEvent: flags.anyEvent, account: flags.account, calendar: flags.calendar }, { yes: flags.yes, ...deps }));
+    case "calendar-delete":
+      if (rest.length !== 1) throw new ToolError("usage", `calendar-delete needs one event id. ${USAGE}`);
+      refuseFor(cmd, flags, [["--title", "title"], ["--start", "start"], ["--end", "end"], ["--description", "description"], ["--location", "location"], ["--key", "key"], ["--all-day", "allDay"], ["--free", "free"], ["--busy", "busy"], ["--private", "private"], ["--public", "public"]]);
+      if (Object.keys(flags.props).length > 0) throw new ToolError("usage", `--prop is not an option of ${cmd}. ${USAGE}`);
+      return out(await deleteEvent({ id: rest[0], actor: flags.actor, anyEvent: flags.anyEvent, account: flags.account, calendar: flags.calendar }, { yes: flags.yes, ...deps }));
     default:
       throw new ToolError("usage", `Unknown command "${cmd}". ${USAGE}`);
   }
