@@ -96,6 +96,6 @@ test("no test can open a real browser: every authorize() call in the tests passe
   const dir = dirname(fileURLToPath(import.meta.url));
   for (const f of readdirSync(dir).filter((n) => n.endsWith(".test.mjs"))) {
     const src = readFileSync(join(dir, f), "utf8");
-    for (const m of src.matchAll(/authorize\(\{[^)]*\}\)/g)) assert.match(m[0], /\bopen\b/, `${f}: ${m[0].slice(0, 60)}`);
+    for (const m of src.matchAll(/authorize(?:Write)?\(\{[^)]*\}\)/g)) assert.match(m[0], /\bopen\b/, `${f}: ${m[0].slice(0, 60)}`);
   }
 });

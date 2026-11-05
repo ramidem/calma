@@ -16,7 +16,8 @@
     "node": ">=22"
   },
   "bin": {
-    "calma": "./calma.mjs"
+    "calma": "./calma.mjs",
+    "calma-write": "./calma-write.mjs"
   },
   "scripts": {
     "test": "node --test \"test/*.test.mjs\""
