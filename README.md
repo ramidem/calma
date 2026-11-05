@@ -30,6 +30,7 @@ Output is JSON on stdout. Errors are JSON too, with exit code 1. With one accoun
 node calma.mjs auth [--no-open]                   # sign in; opens Google's account chooser in your browser
 node calma.mjs accounts                           # list signed-in addresses
 node calma.mjs mail-recent [gmail query]          # default: last 7 days, up to 20
+node calma.mjs mail-today [gmail query]           # since midnight today (your local time), up to 20; "more": true if there were more
 node calma.mjs mail-thread <threadId>             # hex id from mail-recent
 node calma.mjs calendar-week                      # Monday to next Monday
 node calma.mjs uninstall --account <email>        # dry run: lists what it would remove
