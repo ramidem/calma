@@ -12,7 +12,7 @@ const b64 = (s) => Buffer.from(s).toString("base64url");
 test("a callback with the wrong state is ignored and sign-in keeps waiting", async () => {
   const { env } = sandbox({ token: false });
   rmSync(config.tokenPath("personal", env));
-  const fetchFn = async (url) => (String(url).startsWith("https://oauth2.googleapis.com/token") ? jsonResponse({ access_token: "A1", refresh_token: "R1", expires_in: 3600, scope: SCOPE }) : jsonResponse({ emailAddress: "personal@example.com" }));
+  const fetchFn = async (url) => (String(url).startsWith("https://oauth2.googleapis.com/token") ? jsonResponse({ access_token: "FAKE-ACCESS-TOKEN-1", refresh_token: "FAKE-REFRESH-TOKEN-1", expires_in: 3600, scope: SCOPE }) : jsonResponse({ emailAddress: "personal@example.com" }));
   let stray;
   const pending = [];
   const emit = (e) => {
@@ -27,7 +27,7 @@ test("a callback with the wrong state is ignored and sign-in keeps waiting", asy
     cb.searchParams.set("state", u.searchParams.get("state"));
     pending.push(visit(cb, 60));
   };
-  const result = await oauth.authorize({ fetchFn, env, emit, timeoutMs: 5000 });
+  const result = await oauth.authorize({ fetchFn, env, emit, open: null, timeoutMs: 5000 });
   await Promise.all(pending);
   assert.equal(result.event, "authorized");
   assert.equal(await stray, 400);
@@ -114,7 +114,7 @@ test("a stalled body during sign-in (token exchange and profile) is a timeout, a
   const fetchFn = async (url, init) => {
     const u = String(url);
     if (u.includes("/revoke")) return revoked.push(new URLSearchParams(init.body).get("token")), jsonResponse({});
-    if (u.includes("/token")) return jsonResponse({ access_token: "A1", refresh_token: "R1", expires_in: 3600, scope: SCOPE });
+    if (u.includes("/token")) return jsonResponse({ access_token: "FAKE-ACCESS-TOKEN-1", refresh_token: "FAKE-REFRESH-TOKEN-1", expires_in: 3600, scope: SCOPE });
     return stalledBody(200); // the profile call
   };
   const pending = [];
@@ -126,9 +126,9 @@ test("a stalled body during sign-in (token exchange and profile) is a timeout, a
     cb.searchParams.set("state", u.searchParams.get("state"));
     pending.push(visit(cb, 20));
   };
-  await assert.rejects(oauth.authorize({ fetchFn, env, emit, timeoutMs: 5000 }), { code: "timeout" });
+  await assert.rejects(oauth.authorize({ fetchFn, env, emit, open: null, timeoutMs: 5000 }), { code: "timeout" });
   await Promise.all(pending);
-  assert.deepEqual(revoked, ["R1"]);
+  assert.deepEqual(revoked, ["FAKE-REFRESH-TOKEN-1"]);
 });
 
 test("a body that is not JSON is a clear error on a read, and {} where a field check follows", async () => {
