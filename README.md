@@ -8,7 +8,7 @@
 
 ## Setup
 
-1. In Google Cloud, enable the **Gmail API** and **Google Calendar API**. On the OAuth consent screen (type External, status Testing) add the two read-only scopes and your addresses as test users.
+1. In Google Cloud, enable the **Gmail API** and **Google Calendar API**. On the OAuth consent screen (type External) add the two read-only scopes. Publish to Production so refresh tokens last; if the app is in Testing, add your addresses as test users.
 2. Create an **OAuth client ID** (Desktop app) and save the JSON as `~/.config/calma/client.json` (`chmod 600`), or point `MAIL_CLIENT_FILE` at it.
 3. Sign in, once per account:
 
@@ -18,7 +18,7 @@
 
    Your browser opens on Google's account chooser: pick the account and approve. (If it cannot open, or you pass `--no-open`, open the printed `url` yourself.) The token is saved to `~/.config/calma/<address>.json` (mode 600).
 
-Test-mode tokens expire after 7 days; when a command answers `reauth_needed`, run `auth` again.
+Production publishing is preferred so refresh tokens last. Testing expires refresh tokens after 7 days. When a command answers `reauth_needed`, run `auth` again.
 
 Upgrading from a version that used `MAIL_ACCOUNT_*` and `accounts.env`: run `auth` again for each account. Old `<label>.json` tokens are ignored; `uninstall --all --yes` removes them.
 
