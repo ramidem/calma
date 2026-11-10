@@ -9,17 +9,26 @@ import { authorize } from "./lib/oauth.mjs";
 import { uninstall } from "./lib/uninstall.mjs";
 
 const emit = (obj) => process.stdout.write(`${JSON.stringify(obj)}\n`);
-const USAGE = "Usage: calma auth [--no-open] | accounts | mail-recent [query] | mail-today [query] | mail-thread <threadId> | calendar-week | uninstall --account <email>|--all [--yes]   (add --account <email> to the other commands when more than one account is signed in)";
+const USAGE = "Usage: calma auth [--no-open] | accounts | mail-recent [query] | mail-today [query] | mail-thread <threadId> | calendar-week [--calendar <id>] [--from <iso> --to <iso>] | uninstall --account <email>|--all [--yes]   (add --account <email> to the other commands when more than one account is signed in)";
 
-/** Splits `--account <email>` / `-a <email>`, `--yes`, `--all` and `--no-open` from the positional words. */
+/** Splits flag options from the positional words. */
 export function parseArgs(argv) {
-  const flags = { account: undefined, yes: false, all: false, open: true };
+  const flags = { account: undefined, yes: false, all: false, open: true, calendar: undefined, from: undefined, to: undefined };
   const words = [];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--account" || a === "-a") {
       if (i + 1 >= argv.length) throw new ToolError("usage", `${a} needs an email address. ${USAGE}`);
       flags.account = argv[++i];
+    } else if (a === "--calendar") {
+      if (i + 1 >= argv.length) throw new ToolError("usage", `${a} needs a calendar id. ${USAGE}`);
+      flags.calendar = argv[++i];
+    } else if (a === "--from") {
+      if (i + 1 >= argv.length) throw new ToolError("usage", `${a} needs an ISO datetime. ${USAGE}`);
+      flags.from = argv[++i];
+    } else if (a === "--to") {
+      if (i + 1 >= argv.length) throw new ToolError("usage", `${a} needs an ISO datetime. ${USAGE}`);
+      flags.to = argv[++i];
     } else if (a === "--yes") flags.yes = true;
     else if (a === "--all") flags.all = true;
     else if (a === "--no-open") flags.open = false;
@@ -50,7 +59,7 @@ export async function run(argv, deps = {}) {
     case "mail-thread":
       return out(await mailThread(resolveAccount(flags.account, env), rest[0], deps));
     case "calendar-week":
-      return out(await calendarWeek(resolveAccount(flags.account, env), deps));
+      return out(await calendarWeek(resolveAccount(flags.account, env), { calendar: flags.calendar, from: flags.from, to: flags.to, ...deps }));
     default:
       throw new ToolError("usage", `Unknown command "${cmd}". ${USAGE}`);
   }

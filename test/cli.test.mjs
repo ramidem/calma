@@ -23,11 +23,21 @@ const fetchFn = async (url, init) => {
 };
 
 test("parseArgs splits the account flag, --yes and --all from the words", () => {
-  assert.deepEqual(cli.parseArgs(["mail-recent", "from:x@example.com", "newer_than:2d", "--account", "me@example.com"]), { cmd: "mail-recent", rest: ["from:x@example.com", "newer_than:2d"], flags: { account: "me@example.com", yes: false, all: false, open: true } });
-  assert.deepEqual(cli.parseArgs(["-a", "me@example.com", "uninstall", "--all", "--yes"]), { cmd: "uninstall", rest: [], flags: { account: "me@example.com", yes: true, all: true, open: true } });
+  assert.deepEqual(cli.parseArgs(["mail-recent", "from:x@example.com", "newer_than:2d", "--account", "me@example.com"]), { cmd: "mail-recent", rest: ["from:x@example.com", "newer_than:2d"], flags: { account: "me@example.com", yes: false, all: false, open: true, calendar: undefined, from: undefined, to: undefined } });
+  assert.deepEqual(cli.parseArgs(["-a", "me@example.com", "uninstall", "--all", "--yes"]), { cmd: "uninstall", rest: [], flags: { account: "me@example.com", yes: true, all: true, open: true, calendar: undefined, from: undefined, to: undefined } });
   assert.throws(() => cli.parseArgs(["mail-recent", "--account"]), { code: "usage" });
   assert.equal(cli.parseArgs(["auth", "--no-open"]).flags.open, false);
   assert.equal(cli.parseArgs(["auth"]).flags.open, true);
+});
+
+test("parseArgs accepts calendar-week --calendar --from --to", () => {
+  const out = cli.parseArgs(["calendar-week", "--calendar", "actual-cal@example.com", "--from", "2026-11-10T00:00:00+08:00", "--to", "2026-11-17T00:00:00+08:00"]);
+  assert.equal(out.cmd, "calendar-week");
+  assert.equal(out.flags.calendar, "actual-cal@example.com");
+  assert.equal(out.flags.from, "2026-11-10T00:00:00+08:00");
+  assert.equal(out.flags.to, "2026-11-17T00:00:00+08:00");
+  assert.throws(() => cli.parseArgs(["calendar-week", "--calendar"]), { code: "usage" });
+  assert.throws(() => cli.parseArgs(["calendar-week", "--from"]), { code: "usage" });
 });
 
 test("accounts lists the signed-in addresses and never a token", async () => {

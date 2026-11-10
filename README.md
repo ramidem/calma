@@ -32,7 +32,9 @@ node calma.mjs accounts                           # list signed-in addresses
 node calma.mjs mail-recent [gmail query]          # default: last 7 days, up to 20
 node calma.mjs mail-today [gmail query]           # since midnight today (your local time), up to 20; "more": true if there were more
 node calma.mjs mail-thread <threadId>             # hex id from mail-recent
-node calma.mjs calendar-week                      # Monday to next Monday
+node calma.mjs calendar-week                      # Monday to next Monday (primary)
+node calma.mjs calendar-week --calendar <id>      # same week on another calendar (e.g. Actual)
+node calma.mjs calendar-week --from <iso> --to <iso>  # explicit range, at most 31 days (combine with --calendar)
 node calma.mjs uninstall --account <email>        # dry run: lists what it would remove
 node calma.mjs uninstall --account <email> --yes  # revoke that account at Google, delete its token
 node calma.mjs uninstall --all --yes              # every token, client.json, then the empty folder

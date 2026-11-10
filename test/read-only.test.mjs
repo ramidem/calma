@@ -102,12 +102,39 @@ test("calendar-week asks for Monday to next Monday", async () => {
   };
   const out = await google.calendarWeek("personal", { fetchFn, env });
   assert.equal(out.count, 2);
+  assert.equal(out.calendar, "primary");
   assert.equal(out.events[0].attendees, 2);
   assert.equal(out.events[1].allDay, true);
+  assert.equal(seen.pathname, "/calendar/v3/calendars/primary/events");
   assert.equal(seen.searchParams.get("singleEvents"), "true");
   const { start, end } = google.weekRange(new Date(2026, 10, 5, 15, 0)); // a Thursday
   assert.equal(start.getDay(), 1);
   assert.equal(end.getTime() - start.getTime(), 7 * 24 * 3600 * 1000 - (start.getTimezoneOffset() - end.getTimezoneOffset()) * 60_000);
+});
+
+test("calendar-week can read another calendar and an explicit range", async () => {
+  const { env } = sandbox();
+  let seen;
+  const cal = "actual-cal@example.com";
+  const fetchFn = async (url) => {
+    seen = new URL(url);
+    return jsonResponse({ items: [{ id: "a1", summary: "Actual block", start: { dateTime: "2026-11-09T10:00:00+08:00" }, end: { dateTime: "2026-11-09T11:00:00+08:00" } }] });
+  };
+  const out = await google.calendarWeek("personal", {
+    fetchFn,
+    env,
+    calendar: cal,
+    from: "2026-11-09T00:00:00+08:00",
+    to: "2026-11-10T00:00:00+08:00",
+  });
+  assert.equal(out.calendar, cal);
+  assert.equal(out.count, 1);
+  assert.equal(seen.pathname, `/calendar/v3/calendars/${encodeURIComponent(cal)}/events`);
+  assert.equal(seen.searchParams.get("timeMin"), new Date("2026-11-09T00:00:00+08:00").toISOString());
+  assert.equal(seen.searchParams.get("timeMax"), new Date("2026-11-10T00:00:00+08:00").toISOString());
+  await assert.rejects(google.calendarWeek("personal", { fetchFn, env, from: "2026-11-09" }), { code: "bad_args" });
+  await assert.rejects(google.calendarWeek("personal", { fetchFn, env, calendar: "../evil" }), { code: "bad_calendar" });
+  await assert.rejects(google.calendarWeek("personal", { fetchFn, env, from: "2026-01-01", to: "2026-03-01" }), { code: "bad_args" });
 });
 
 test("the repo's .gitignore keeps token and credential files out", () => {
