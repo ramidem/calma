@@ -11,7 +11,7 @@ Writers: Schedule, Parenting and Grook; personal account only, never the kids' a
 - [x] PR 3: `calendar-update` (own events freely; others need `--any-event`; etag check; no guests, series or cancelled events).
 - [x] PR 4: `calendar-delete` (id + `--yes`, title shown first, refuses guests, series and unmarked events).
 - [ ] PR 5: docs: README, SECURITY.md, CONTRIBUTING.md and the repo description say what is true.
-- [ ] Med: add `calendar.events` on the Google consent screen, then `node calma-write.mjs allow --account <email>`, `allow --calendar primary`, and `auth`.
+- [ ] Med: add `calendar.events` on the Google consent screen, then `node src/calma-write.ts allow --account <email>`, `allow --calendar primary`, and `auth`.
 
 ## Open
 
