@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
-import { readFileSync, statSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { test } from "node:test";
 import { listAccounts } from "../src/lib/accounts.ts";
 import * as config from "../src/lib/config.ts";
@@ -123,4 +123,56 @@ test("auth: end to end with a mocked Google, and refuses a wrong account or extr
   // Signing in again as the same account replaces its token; a second account adds one.
   const again = await runAuth({ email: " Me@Example.com " });
   assert.equal(again.r.account, "me@example.com");
+});
+
+const tmpFiles = (dir: string) => readdirSync(dir).filter((f) => f.endsWith(".tmp"));
+
+test("writeSecretFile writes mode 600, replaces an existing file, and leaves no temp", () => {
+  const { dir, env } = sandbox();
+  const path = config.tokenPath("school", env);
+  config.writeSecretFile(path, '{"n":1}', (tmp) => {
+    assert.equal(mode(tmp), 0o600);
+  });
+  assert.equal(mode(path), 0o600);
+  assert.equal(readFileSync(path, "utf8"), '{"n":1}');
+  config.writeSecretFile(path, '{"n":2}');
+  assert.equal(readFileSync(path, "utf8"), '{"n":2}');
+  assert.equal(mode(path), 0o600);
+  assert.deepEqual(tmpFiles(dir), []);
+});
+
+test("a failing rename leaves the old secret and no temp file", () => {
+  const { dir, env } = sandbox();
+  const path = config.tokenPath("school", env);
+  config.writeSecretFile(path, '{"n":1}');
+  assert.throws(
+    () =>
+      config.writeSecretFile(path, '{"n":2}', () => {
+        throw new Error("rename failed");
+      }),
+    { message: "rename failed" },
+  );
+  assert.equal(readFileSync(path, "utf8"), '{"n":1}');
+  assert.deepEqual(tmpFiles(dir), []);
+});
+
+test("a reader never sees empty or invalid JSON while the file is rewritten", () => {
+  const { dir, env } = sandbox();
+  const path = config.tokenPath("school", env);
+  const seen = new Set<number>();
+  const read = () => {
+    const text = readFileSync(path, "utf8");
+    assert.notEqual(text, "");
+    const data = JSON.parse(text) as { n: number };
+    assert.equal(typeof data.n, "number");
+    seen.add(data.n);
+  };
+  config.writeSecretFile(path, JSON.stringify({ n: 0 }));
+  for (let n = 1; n <= 200; n++) {
+    config.writeSecretFile(path, JSON.stringify({ n }), () => read());
+    read();
+  }
+  assert.equal(readFileSync(path, "utf8"), JSON.stringify({ n: 200 }));
+  assert.deepEqual(tmpFiles(dir), []);
+  assert.ok(seen.has(0) && seen.has(200));
 });

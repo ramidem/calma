@@ -1,7 +1,8 @@
 // Accounts, scopes and where the secrets live. Nothing in this folder ever writes to the repo.
-import { chmodSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { randomBytes } from "node:crypto";
+import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { asRec } from "./record.ts";
 import type { Env, TokenInput, ToolErrorCode } from "./types.ts";
 
@@ -44,9 +45,22 @@ export function ensureConfigDir(env: Env = process.env) {
   return dir;
 }
 
-/** Writes a file with mode 600, never wider, even if it already existed. */
-export function writeSecretFile(path: string, text: string) {
-  writeFileSync(path, text, { mode: 0o600 });
+/** Writes a file with mode 600, never wider, even if it already existed. A sibling temp file is renamed over the target so a reader never sees empty or partial content. */
+export function writeSecretFile(path: string, text: string, beforeRename?: (tmp: string, dest: string) => void) {
+  const tmp = join(dirname(path), `${basename(path)}.${process.pid}.${randomBytes(8).toString("hex")}.tmp`);
+  try {
+    writeFileSync(tmp, text, { mode: 0o600 });
+    chmodSync(tmp, 0o600);
+    beforeRename?.(tmp, path);
+    renameSync(tmp, path);
+  } catch (err) {
+    try {
+      unlinkSync(tmp);
+    } catch {
+      // write never created it, or rename already consumed it
+    }
+    throw err;
+  }
   chmodSync(path, 0o600);
 }
 
