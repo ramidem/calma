@@ -45,6 +45,22 @@ test("listAccounts finds signed-in addresses only, sorted, and ignores labels, o
   assert.deepEqual(listAccounts({ CALMA_DIR: join(dir, "missing") }), []);
 });
 
+test("listAccounts ignores a writeSecretFile temp (the stem is not a canonical address)", () => {
+  const { dir, env } = empty();
+  signIn(env, "amy@example.com");
+  const token = JSON.stringify({ account: "zed@example.com", scope: SCOPE, access_token: "FAKE", refresh_token: "FAKE", expires_at: 0 });
+  writeFileSync(join(dir, `${"zed@example.com"}.json.${process.pid}.cafef00d.tmp`), token);
+  assert.deepEqual(listAccounts(env), ["amy@example.com"]);
+  let sawTmp = false;
+  config.writeSecretFile(config.tokenPath("zed@example.com", env), token, (tmp) => {
+    sawTmp = true;
+    assert.match(tmp, /\.tmp$/);
+    assert.deepEqual(listAccounts(env), ["amy@example.com"], "an in-progress temp is not an account");
+  });
+  assert.equal(sawTmp, true);
+  assert.deepEqual(listAccounts(env), ["amy@example.com", "zed@example.com"]);
+});
+
 test("resolveAccount: one account needs no flag", () => {
   const { env } = empty();
   signIn(env, "me@example.com");
